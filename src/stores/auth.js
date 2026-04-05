@@ -2,18 +2,32 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authService } from '@/services/api'
 
+// Safe localStorage read — never crashes on corrupted/undefined values
+function safeRead(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw || raw === 'undefined' || raw === 'null') return null
+    return JSON.parse(raw)
+  } catch (_) {
+    localStorage.removeItem(key)
+    return null
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
-  const user  = ref(JSON.parse(localStorage.getItem('tasleem_user') || 'null'))
-  const token = ref(localStorage.getItem('tasleem_token') || null)
+  const user    = ref(safeRead('tasleem_user'))
+  const token   = ref(localStorage.getItem('tasleem_token') || null)
   const loading = ref(false)
-  const emailVerified = ref(false)
 
-  const isAuthenticated = computed(() => !!token.value)
-  const isAdmin         = computed(() => user.value?.role === 'admin')
-  const isSeller        = computed(() => ['seller','admin'].includes(user.value?.role))
-  const fullName        = computed(() => user.value?.name || '')
-  const needsVerification = computed(() => user.value && !user.value.email_verified_at)
+  // ── Computed ───────────────────────────────────────────────────────
+  const isAuthenticated  = computed(() => !!token.value)
+  const isAdmin          = computed(() => user.value?.role === 'admin')
+  const isSeller         = computed(() => user.value?.role === 'seller' || user.value?.role === 'admin')
+  const needsVerification= computed(() => isAuthenticated.value && !user.value?.email_verified_at)
+  const fullName         = computed(() => user.value?.name || '')
+  const emailVerified    = computed(() => !!user.value?.email_verified_at)
 
+  // ── Auth helpers ───────────────────────────────────────────────────
   function setAuth(userData, tokenData) {
     user.value  = userData
     token.value = tokenData
@@ -28,15 +42,31 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('tasleem_token')
   }
 
+  // ── Extract user+token from any backend response shape ─────────────
+  // Handles: { user, token }  OR  { data: { user, token } }  OR  { success, data: { user, token } }
+  function extractAuth(responseData) {
+    const d = responseData?.data || responseData
+    return {
+      userData:  d?.user  || responseData?.user,
+      tokenData: d?.token || responseData?.token,
+    }
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────
   async function login(credentials) {
     loading.value = true
     try {
       const res = await authService.login(credentials)
-      const { user: u, token: t } = res.data
-      setAuth(u, t)
+      const { userData, tokenData } = extractAuth(res.data)
+      if (!userData || !tokenData) throw new Error('Invalid response from server')
+      setAuth(userData, tokenData)
       return { success: true }
     } catch (err) {
-      return { success: false, message: err.response?.data?.message || 'Login failed' }
+      return {
+        success: false,
+        message: err.response?.data?.message || err.message || 'Login failed',
+        errors:  err.response?.data?.errors  || {}
+      }
     } finally {
       loading.value = false
     }
@@ -46,13 +76,14 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       const res = await authService.register(data)
-      const { user: u, token: t } = res.data
-      setAuth(u, t)
+      const { userData, tokenData } = extractAuth(res.data)
+      if (!userData || !tokenData) throw new Error('Invalid response from server')
+      setAuth(userData, tokenData)
       return { success: true }
     } catch (err) {
       return {
         success: false,
-        message: err.response?.data?.message || 'Registration failed',
+        message: err.response?.data?.message || err.message || 'Registration failed',
         errors:  err.response?.data?.errors  || {}
       }
     } finally {
@@ -61,15 +92,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    try { await authService.logout() } catch (_) {}
+    try { await authService.logout() } catch (_) { /* silent */ }
     clearAuth()
   }
 
   async function fetchMe() {
     try {
-      const res = await authService.me()
-      user.value = res.data.user || res.data
-      localStorage.setItem('tasleem_user', JSON.stringify(user.value))
+      const res  = await authService.me()
+      const userData = res.data?.user || res.data
+      user.value = userData
+      localStorage.setItem('tasleem_user', JSON.stringify(userData))
     } catch (_) {
       clearAuth()
     }
@@ -80,8 +112,9 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { userService } = await import('@/services/api')
       const res = await userService.update(user.value.id, data)
-      user.value = res.data.user || res.data
-      localStorage.setItem('tasleem_user', JSON.stringify(user.value))
+      const userData = res.data?.user || res.data?.data || res.data
+      user.value = userData
+      localStorage.setItem('tasleem_user', JSON.stringify(userData))
       return { success: true }
     } catch (err) {
       return { success: false, message: err.response?.data?.message || 'Update failed' }
@@ -90,22 +123,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // ⚠️  Not implemented in backend yet — stubs return a friendly message
-  async function forgotPassword() {
-    return { success: false, message: 'Password reset is not available yet. Please contact support.' }
-  }
-
-  async function resetPassword() {
-    return { success: false, message: 'Password reset is not available yet. Please contact support.' }
-  }
-
-  async function resendVerification() {
-    return { success: false, message: 'Email verification is not available yet. Please contact support.' }
-  }
+  // Stubs — not implemented in backend yet
+  async function forgotPassword()     { return { success: false, message: 'Not available yet. Contact support.' } }
+  async function resetPassword()      { return { success: false, message: 'Not available yet. Contact support.' } }
+  async function resendVerification() { return { success: false, message: 'Not available yet. Contact support.' } }
 
   return {
-    user, token, loading, emailVerified,
-    isAuthenticated, isAdmin, isSeller, fullName, needsVerification,
+    user, token, loading,
+    isAuthenticated, isAdmin, isSeller, fullName, emailVerified, needsVerification,
     login, register, logout, fetchMe, updateProfile,
     forgotPassword, resetPassword, resendVerification,
   }
