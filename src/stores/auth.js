@@ -1,8 +1,9 @@
+// src/stores/auth.js — full version with email features enabled
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authService } from '@/services/api'
 
-// Safe localStorage read — never crashes on corrupted/undefined values
 function safeRead(key) {
   try {
     const raw = localStorage.getItem(key)
@@ -19,15 +20,13 @@ export const useAuthStore = defineStore('auth', () => {
   const token   = ref(localStorage.getItem('tasleem_token') || null)
   const loading = ref(false)
 
-  // ── Computed ───────────────────────────────────────────────────────
-  const isAuthenticated  = computed(() => !!token.value)
-  const isAdmin          = computed(() => user.value?.role === 'admin')
-  const isSeller         = computed(() => user.value?.role === 'seller' || user.value?.role === 'admin')
-  const needsVerification= computed(() => isAuthenticated.value && !user.value?.email_verified_at)
-  const fullName         = computed(() => user.value?.name || '')
-  const emailVerified    = computed(() => !!user.value?.email_verified_at)
+  const isAuthenticated   = computed(() => !!token.value)
+  const isAdmin           = computed(() => user.value?.role === 'admin')
+  const isSeller          = computed(() => user.value?.role === 'seller' || user.value?.role === 'admin')
+  const needsVerification = computed(() => isAuthenticated.value && !user.value?.email_verified_at)
+  const fullName          = computed(() => user.value?.name || '')
+  const emailVerified     = computed(() => !!user.value?.email_verified_at)
 
-  // ── Auth helpers ───────────────────────────────────────────────────
   function setAuth(userData, tokenData) {
     user.value  = userData
     token.value = tokenData
@@ -42,8 +41,6 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('tasleem_token')
   }
 
-  // ── Extract user+token from any backend response shape ─────────────
-  // Handles: { user, token }  OR  { data: { user, token } }  OR  { success, data: { user, token } }
   function extractAuth(responseData) {
     const d = responseData?.data || responseData
     return {
@@ -52,7 +49,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // ── Actions ────────────────────────────────────────────────────────
   async function login(credentials) {
     loading.value = true
     try {
@@ -62,11 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
       setAuth(userData, tokenData)
       return { success: true }
     } catch (err) {
-      return {
-        success: false,
-        message: err.response?.data?.message || err.message || 'Login failed',
-        errors:  err.response?.data?.errors  || {}
-      }
+      return { success: false, message: err.response?.data?.message || 'Login failed', errors: err.response?.data?.errors || {} }
     } finally {
       loading.value = false
     }
@@ -81,18 +73,14 @@ export const useAuthStore = defineStore('auth', () => {
       setAuth(userData, tokenData)
       return { success: true }
     } catch (err) {
-      return {
-        success: false,
-        message: err.response?.data?.message || err.message || 'Registration failed',
-        errors:  err.response?.data?.errors  || {}
-      }
+      return { success: false, message: err.response?.data?.message || 'Registration failed', errors: err.response?.data?.errors || {} }
     } finally {
       loading.value = false
     }
   }
 
   async function logout() {
-    try { await authService.logout() } catch (_) { /* silent */ }
+    try { await authService.logout() } catch (_) {}
     clearAuth()
   }
 
@@ -102,9 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
       const userData = res.data?.user || res.data
       user.value = userData
       localStorage.setItem('tasleem_user', JSON.stringify(userData))
-    } catch (_) {
-      clearAuth()
-    }
+    } catch (_) { clearAuth() }
   }
 
   async function updateProfile(data) {
@@ -123,10 +109,45 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // Stubs — not implemented in backend yet
-  async function forgotPassword()     { return { success: false, message: 'Not available yet. Contact support.' } }
-  async function resetPassword()      { return { success: false, message: 'Not available yet. Contact support.' } }
-  async function resendVerification() { return { success: false, message: 'Not available yet. Contact support.' } }
+  // ── Email features — now real API calls ───────────────────────────
+
+  async function forgotPassword(email) {
+    loading.value = true
+    try {
+      await authService.forgotPassword({ email })
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: err.response?.data?.message || 'Failed to send reset link' }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function resetPassword(data) {
+    loading.value = true
+    try {
+      const res = await authService.resetPassword(data)
+      const { userData, tokenData } = extractAuth(res.data)
+      if (userData && tokenData) setAuth(userData, tokenData)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: err.response?.data?.message || 'Password reset failed', errors: err.response?.data?.errors || {} }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function resendVerification() {
+    loading.value = true
+    try {
+      await authService.resendVerification()
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: err.response?.data?.message || 'Failed to resend email' }
+    } finally {
+      loading.value = false
+    }
+  }
 
   return {
     user, token, loading,

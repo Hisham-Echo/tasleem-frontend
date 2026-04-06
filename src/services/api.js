@@ -39,16 +39,14 @@ export default api
 //       NOT in this backend — those views are hidden in the UI.
 // ─────────────────────────────────────────────────────────────
 export const authService = {
-  register: data => api.post('/register', data),
-  login:    data => api.post('/login', data),
-  logout:   ()   => api.post('/logout'),
-  me:       ()   => api.get('/me'),
-  // ⚠️ Not implemented in backend — kept as stubs so the views
-  //    don't crash; they will show a "not available" message.
-  forgotPassword:     () => Promise.reject(new Error('NOT_IMPLEMENTED')),
-  resetPassword:      () => Promise.reject(new Error('NOT_IMPLEMENTED')),
-  verifyEmail:        () => Promise.reject(new Error('NOT_IMPLEMENTED')),
-  resendVerification: () => Promise.reject(new Error('NOT_IMPLEMENTED')),
+  register:           data           => api.post('/register', data),
+  login:              data           => api.post('/login', data),
+  logout:             ()             => api.post('/logout'),
+  me:                 ()             => api.get('/me'),
+  forgotPassword:     data           => api.post('/forgot-password', data),
+  resetPassword:      data           => api.post('/reset-password', data),
+  resendVerification: ()             => api.post('/email/verification-notification'),
+  // Note: verify-email is clicked from email — backend handles it, no frontend call needed
 }
 
 // ─────────────────────────────────────────────────────────────
