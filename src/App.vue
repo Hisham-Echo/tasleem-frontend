@@ -1,7 +1,7 @@
 <template>
   <div id="app-root">
     <!-- Email verification banner -->
-    <div v-if="false"
+    <div v-if="auth.isAuthenticated && auth.needsVerification && !isAuthPage && !isVerifyPage"
       class="verify-banner d-flex align-items-center justify-content-center gap-2 px-3 py-2 flex-wrap">
       <i class="bi bi-envelope-exclamation-fill"></i>
       <span style="font-size:.85rem;">Please verify your email address to access all features.</span>
@@ -52,7 +52,7 @@ onMounted(async () => {
   if (auth.isAuthenticated) {
     await auth.fetchMe()
     await Promise.all([cart.fetchCart(), wishlist.fetchWishlist()])
-    // notifications.startPolling(60000) — endpoint not in backend yet
+    // notifications disabled — no backend endpoint yet
   }
 })
 

@@ -1,5 +1,3 @@
-// src/stores/auth.js — full version with email features enabled
-
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authService } from '@/services/api'

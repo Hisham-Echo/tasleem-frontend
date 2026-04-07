@@ -58,7 +58,10 @@
 
           <!-- Password -->
           <div class="mb-4">
-            <label class="form-label">Password</label>
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label mb-0">Password</label>
+              <RouterLink to="/forgot-password" class="text-gold text-decoration-none" style="font-size:.82rem;">Forgot password?</RouterLink>
+            </div>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-lock"></i></span>
               <input
