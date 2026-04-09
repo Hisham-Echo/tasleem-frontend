@@ -39,14 +39,16 @@ export default api
 //       NOT in this backend — those views are hidden in the UI.
 // ─────────────────────────────────────────────────────────────
 export const authService = {
-  register:           data           => api.post('/register', data),
-  login:              data           => api.post('/login', data),
-  logout:             ()             => api.post('/logout'),
-  me:                 ()             => api.get('/me'),
-  forgotPassword:     data           => api.post('/forgot-password', data),
-  resetPassword:      data           => api.post('/reset-password', data),
-  resendVerification: ()             => api.post('/email/verification-notification'),
-  // Note: verify-email is clicked from email — backend handles it, no frontend call needed
+  register: data => api.post('/register', data),
+  login:    data => api.post('/login', data),
+  logout:   ()   => api.post('/logout'),
+  me:       ()   => api.get('/me'),
+  // ⚠️ Not implemented in backend — kept as stubs so the views
+  //    don't crash; they will show a "not available" message.
+  forgotPassword:     () => Promise.reject(new Error('NOT_IMPLEMENTED')),
+  resetPassword:      () => Promise.reject(new Error('NOT_IMPLEMENTED')),
+  verifyEmail:        () => Promise.reject(new Error('NOT_IMPLEMENTED')),
+  resendVerification: () => Promise.reject(new Error('NOT_IMPLEMENTED')),
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -247,4 +249,25 @@ export const notificationService = {
   markRead:     () => Promise.resolve({ data: { message: 'ok' } }),
   markAllRead:  () => Promise.resolve({ data: { message: 'ok' } }),
   getUnreadCount: () => Promise.resolve({ data: { unread_count: 0 } }),
+}
+
+// ─────────────────────────────────────────────────────────────────
+// AI  — personalized recommendations, trending, search, assistant
+// ─────────────────────────────────────────────────────────────────
+export const aiService = {
+  // Personalized recs for logged-in user (auth required)
+  forUser:    (lastProductId = null) => api.get('/recommendations', lastProductId ? { params: { last_product_id: lastProductId } } : {}),
+  // Public sections
+  trending:   ()                     => api.get('/ai/trending'),
+  explore:    ()                     => api.get('/ai/explore'),
+  // Auth required
+  similar:    productId              => api.get(`/ai/similar/${productId}`),
+  search:     q                      => api.get('/ai/search', { params: { q } }),
+  assistant:  query                  => api.get('/ai/assistant', { params: { query } }),
+}
+
+// Keep old recommendationService as alias so nothing breaks
+export const recommendationService = {
+  getAll: params => api.get('/recommendations', { params }),
+  getById: id => api.get(`/recommendations/${id}`),
 }

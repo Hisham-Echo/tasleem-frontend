@@ -182,13 +182,28 @@
       <h5 class="text-muted mt-3">Product not found</h5>
       <RouterLink class="btn btn-outline-gold mt-2" to="/products">Back to Products</RouterLink>
     </div>
-  </div>
+  
+    <!-- ── Similar Products (AI) ──────────────────────────────────── -->
+    <section class="py-5" v-if="similarProducts.length > 0" style="background:var(--navy);">
+      <div class="container">
+        <div class="d-flex align-items-center gap-2 mb-4">
+          <i class="bi bi-grid-3x3-gap text-gold fs-4"></i>
+          <h3 class="text-cream mb-0">Similar Products</h3>
+        </div>
+        <div class="row g-4">
+          <div class="col-6 col-md-4 col-xl-2" v-for="p in similarProducts" :key="p.id">
+            <ProductCard :product="p" />
+          </div>
+        </div>
+      </div>
+    </section>
+</div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { productService, imageService, reviewService } from '@/services/api'
+import { productService, aiService, imageService, reviewService } from '@/services/api'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
