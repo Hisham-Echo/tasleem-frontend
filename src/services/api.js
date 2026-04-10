@@ -267,7 +267,7 @@ export const aiService = {
 }
 
 // Keep old recommendationService as alias so nothing breaks
-export const recommendationService = {
-  getAll: params => api.get('/recommendations', { params }),
-  getById: id => api.get(`/recommendations/${id}`),
-}
+// export const recommendationService = {
+//   getAll: params => api.get('/recommendations', { params }),
+//   getById: id => api.get(`/recommendations/${id}`),
+// }
