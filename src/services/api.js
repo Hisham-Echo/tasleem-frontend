@@ -43,12 +43,9 @@ export const authService = {
   login:    data => api.post('/login', data),
   logout:   ()   => api.post('/logout'),
   me:       ()   => api.get('/me'),
-  // ⚠️ Not implemented in backend — kept as stubs so the views
-  //    don't crash; they will show a "not available" message.
-  forgotPassword:     () => Promise.reject(new Error('NOT_IMPLEMENTED')),
-  resetPassword:      () => Promise.reject(new Error('NOT_IMPLEMENTED')),
-  verifyEmail:        () => Promise.reject(new Error('NOT_IMPLEMENTED')),
-  resendVerification: () => Promise.reject(new Error('NOT_IMPLEMENTED')),
+  forgotPassword:     data => api.post('/forgot-password', data),
+  resetPassword:      data => api.post('/reset-password', data),
+  resendVerification: ()   => api.post('/email/verification-notification'),
 }
 
 // ─────────────────────────────────────────────────────────────
