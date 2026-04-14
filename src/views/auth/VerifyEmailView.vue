@@ -63,7 +63,25 @@ async function logout() {
   router.push('/login')
 }
 
-onMounted(() => {
-  if (!auth.needsVerification) router.push('/')
+onMounted(async () => {
+  if (!auth.needsVerification) {
+    router.push('/')
+    return
+  }
+
+  // If user was redirected back from email link with backendUrl param
+  const backendUrl = route.query.backendUrl
+  if (backendUrl) {
+    try {
+      // Call the actual Laravel signed verification URL
+      await fetch(decodeURIComponent(backendUrl))
+      await auth.fetchMe()  // refresh user data
+      if (!auth.needsVerification) {
+        router.push('/?verified=1')
+      }
+    } catch (e) {
+      errorMsg.value = 'Verification failed. Try resending.'
+    }
+  }
 })
 </script>
