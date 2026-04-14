@@ -12,11 +12,11 @@
       <div class="alert py-2 px-3 mb-3" style="background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.25);border-radius:.6rem;font-size:.85rem;" v-if="resentOk">
         <i class="bi bi-check-circle me-2"></i>Verification email resent!
       </div>
-      <div class="alert alert-danger py-2 px-3 mb-3" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);border-radius:.6rem;font-size:.85rem;" v-if="errorMsg">
+      <div class="alert py-2 px-3 mb-3" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);border-radius:.6rem;font-size:.85rem;" v-if="errorMsg">
         <i class="bi bi-exclamation-circle me-2"></i>{{ errorMsg }}
       </div>
 
-      <button class="btn btn-gold w-100 mb-2" @click="resend" :disabled="auth.loading||cooldown>0">
+      <button class="btn btn-gold w-100 mb-2" @click="resend" :disabled="auth.loading || cooldown > 0">
         <span class="spinner-border spinner-border-sm me-2" v-if="auth.loading"></span>
         {{ cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Verification Email' }}
       </button>
@@ -28,12 +28,16 @@
     </div>
   </div>
 </template>
+
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
 const resentOk = ref(false)
 const errorMsg = ref('')
 const cooldown = ref(0)
@@ -42,20 +46,30 @@ let timer = null
 async function resend() {
   resentOk.value = false
   errorMsg.value = ''
-  const res = await auth.resendVerification()
-  if (res.success) {
-    resentOk.value = true
-    cooldown.value = 60
-    timer = setInterval(() => { if (--cooldown.value <= 0) clearInterval(timer) }, 1000)
-  } else {
-    errorMsg.value = res.message
+  try {
+    const res = await auth.resendVerification()
+    if (res.success) {
+      resentOk.value = true
+      cooldown.value = 60
+      timer = setInterval(() => {
+        if (--cooldown.value <= 0) clearInterval(timer)
+      }, 1000)
+    } else {
+      errorMsg.value = res.message || 'Could not send verification email. Please try again later.'
+    }
+  } catch (_) {
+    errorMsg.value = 'Could not send verification email. Please try again later.'
   }
 }
 
 async function checkVerification() {
+  errorMsg.value = ''
   await auth.fetchMe()
-  if (!auth.needsVerification) router.push('/')
-  else errorMsg.value = 'Email not verified yet. Please click the link in your inbox.'
+  if (!auth.needsVerification) {
+    router.push(route.query.redirect || '/')
+  } else {
+    errorMsg.value = 'Email not verified yet. Please click the link in your inbox.'
+  }
 }
 
 async function logout() {
@@ -63,25 +77,13 @@ async function logout() {
   router.push('/login')
 }
 
-onMounted(async () => {
+onMounted(() => {
   if (!auth.needsVerification) {
     router.push('/')
-    return
   }
+})
 
-  // If user was redirected back from email link with backendUrl param
-  const backendUrl = route.query.backendUrl
-  if (backendUrl) {
-    try {
-      // Call the actual Laravel signed verification URL
-      await fetch(decodeURIComponent(backendUrl))
-      await auth.fetchMe()  // refresh user data
-      if (!auth.needsVerification) {
-        router.push('/?verified=1')
-      }
-    } catch (e) {
-      errorMsg.value = 'Verification failed. Try resending.'
-    }
-  }
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer)
 })
 </script>

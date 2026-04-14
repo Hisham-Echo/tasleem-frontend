@@ -24,7 +24,7 @@ Make sure your `config/cors.php` allows it:
 'allowed_origins' => [
     'http://localhost:5173',
     'http://localhost:3000',
-    'https://your-production-domain.com',
+    'https://tasleem-frontend.vercel.app/',
 ],
 'allowed_methods' => ['*'],
 'allowed_headers' => ['*'],
