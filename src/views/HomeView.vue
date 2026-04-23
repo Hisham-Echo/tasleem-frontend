@@ -54,45 +54,6 @@
       </div>
     </section>
 
-    <!-- ── AI Search Bar ─────────────────────────────────────────── -->
-    <section style="background:var(--navy);border-bottom:1px solid var(--navy-border);">
-      <div class="container py-4">
-        <div class="d-flex gap-2" style="max-width:600px;margin:0 auto;">
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-stars text-gold"></i></span>
-            <input
-              v-model="aiQuery"
-              class="form-control"
-              placeholder="Ask AI: 'Find me a camera for under 20,000 EGP'…"
-              @keydown.enter="askAssistant"
-              :disabled="assistantLoading"
-            />
-            <button class="btn btn-gold px-3" @click="askAssistant" :disabled="assistantLoading || !aiQuery.trim()">
-              <span class="spinner-border spinner-border-sm" v-if="assistantLoading"></span>
-              <i class="bi bi-send-fill" v-else></i>
-            </button>
-          </div>
-        </div>
-        <!-- AI Answer -->
-        <Transition name="fade">
-          <div v-if="assistantAnswer" class="mt-3 p-3 card" style="max-width:600px;margin:0 auto;border-color:rgba(201,169,110,.25);">
-            <div class="d-flex align-items-start gap-2">
-              <i class="bi bi-robot text-gold flex-shrink-0 mt-1"></i>
-              <p class="mb-0 text-cream" style="font-size:.9rem;line-height:1.7;">{{ assistantAnswer }}</p>
-            </div>
-          </div>
-        </Transition>
-        <!-- AI suggested products -->
-        <div v-if="assistantProducts.length > 0" class="mt-3">
-          <div class="row g-3" style="max-width:900px;margin:0 auto;">
-            <div class="col-6 col-md-4 col-lg-3" v-for="p in assistantProducts" :key="p.id">
-              <ProductCard :product="p" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- ── Categories ──────────────────────────────────────────── -->
     <section class="py-5" style="background:var(--navy);">
       <div class="container">
@@ -245,12 +206,6 @@ const productsLoading    = ref(true)
 const trendingLoading    = ref(true)
 const exploreLoading     = ref(false)
 
-// AI assistant
-const aiQuery            = ref('')
-const assistantLoading   = ref(false)
-const assistantAnswer    = ref('')
-const assistantProducts  = ref([])
-
 const rentalFeatures = [
   { icon: 'bi bi-calendar-check', title: 'Flexible Dates', desc: 'Daily, weekly or monthly' },
   { icon: 'bi bi-shield-check',   title: 'Insured',        desc: 'All rentals are covered' },
@@ -270,22 +225,6 @@ async function loadExplore() {
     const res = await aiService.explore()
     exploreProducts.value = res.data?.products || []
   } catch (_) {} finally { exploreLoading.value = false }
-}
-
-async function askAssistant() {
-  if (!aiQuery.value.trim()) return
-  assistantLoading.value = true
-  assistantAnswer.value  = ''
-  assistantProducts.value = []
-  try {
-    const res = await aiService.assistant(aiQuery.value.trim())
-    assistantAnswer.value   = res.data?.answer || ''
-    assistantProducts.value = res.data?.products || []
-  } catch (_) {
-    assistantAnswer.value = 'AI assistant is temporarily unavailable.'
-  } finally {
-    assistantLoading.value = false
-  }
 }
 
 onMounted(async () => {

@@ -17,11 +17,57 @@
       </div>
 
       <div class="collapse navbar-collapse" id="navbarMain">
-        <!-- Search -->
-        <form class="search-bar d-flex mx-lg-4 my-2 my-lg-0 flex-grow-1" @submit.prevent="onSearch">
-          <input class="form-control" type="search" placeholder="Search products..." v-model="searchQuery" />
-          <button class="btn" type="submit"><i class="bi bi-search"></i></button>
-        </form>
+        <!-- AI Search -->
+        <div class="ai-search-wrap d-flex mx-lg-4 my-2 my-lg-0 flex-grow-1 position-relative" ref="aiSearchWrap">
+          <div class="input-group">
+            <span class="input-group-text ai-search-prefix">
+              <i class="bi bi-stars text-gold"></i>
+            </span>
+            <input
+              class="form-control ai-search-input"
+              type="text"
+              placeholder="Ask AI to find products…"
+              v-model="aiQuery"
+              @keydown.enter="askAssistant"
+              @input="showResults = false"
+              :disabled="assistantLoading"
+            />
+            <button class="btn btn-gold ai-search-btn" @click="askAssistant" :disabled="assistantLoading || !aiQuery.trim()">
+              <span class="spinner-border spinner-border-sm" v-if="assistantLoading"></span>
+              <i class="bi bi-send-fill" v-else></i>
+            </button>
+          </div>
+
+          <!-- AI Results Dropdown -->
+          <Transition name="fade">
+            <div v-if="showResults && (assistantAnswer || assistantProducts.length > 0)" class="ai-results-dropdown">
+              <p v-if="assistantAnswer" class="ai-answer mb-2">
+                <i class="bi bi-robot text-gold me-2"></i>{{ assistantAnswer }}
+              </p>
+              <div v-if="assistantProducts.length > 0" class="d-flex flex-column gap-1">
+                <RouterLink
+                  v-for="p in assistantProducts.slice(0, 4)"
+                  :key="p.id"
+                  :to="`/products/${p.id}`"
+                  class="ai-product-item"
+                  @click="showResults = false; aiQuery = ''"
+                >
+                  <div class="ai-product-img-wrap">
+                    <img v-if="p.image" :src="p.image" />
+                    <i v-else class="bi bi-image text-muted" style="font-size:.8rem;"></i>
+                  </div>
+                  <div class="flex-grow-1 min-w-0">
+                    <div class="text-cream text-truncate" style="font-size:.82rem;font-weight:500;">{{ p.name }}</div>
+                    <div class="text-gold" style="font-size:.76rem;">{{ formatPrice(p.price) }}</div>
+                  </div>
+                </RouterLink>
+              </div>
+              <button class="btn btn-link text-muted p-0 mt-2" style="font-size:.73rem;" @click="showResults = false; aiQuery = ''">
+                <i class="bi bi-x me-1"></i>Clear
+              </button>
+            </div>
+          </Transition>
+        </div>
 
         <ul class="navbar-nav align-items-lg-center gap-1">
           <li class="nav-item">
@@ -125,12 +171,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useToast } from 'vue-toastification'
+import { aiService } from '@/services/api'
 import NotificationBell from '@/components/ui/NotificationBell.vue'
 
 const router = useRouter()
@@ -138,7 +185,14 @@ const auth = useAuthStore()
 const cart = useCartStore()
 const wishlist = useWishlistStore()
 const toast = useToast()
-const searchQuery = ref('')
+
+// AI Search state
+const aiQuery = ref('')
+const assistantLoading = ref(false)
+const assistantAnswer = ref('')
+const assistantProducts = ref([])
+const showResults = ref(false)
+const aiSearchWrap = ref(null)
 
 const initials = computed(() =>
   (auth.fullName || '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'U'
@@ -149,10 +203,33 @@ const roleBadge = computed(() => {
   return m[auth.user?.role] || 'badge-gold'
 })
 
-function onSearch() {
-  if (!searchQuery.value.trim()) return
-  router.push({ name: 'Search', query: { q: searchQuery.value.trim() } })
-  searchQuery.value = ''
+function formatPrice(v) {
+  return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(v || 0)
+}
+
+async function askAssistant() {
+  if (!aiQuery.value.trim() || assistantLoading.value) return
+  assistantLoading.value = true
+  assistantAnswer.value = ''
+  assistantProducts.value = []
+  showResults.value = false
+  try {
+    const res = await aiService.assistant(aiQuery.value.trim())
+    assistantAnswer.value = res.data?.answer || ''
+    assistantProducts.value = res.data?.products || []
+    showResults.value = true
+  } catch (_) {
+    assistantAnswer.value = 'AI assistant is temporarily unavailable.'
+    showResults.value = true
+  } finally {
+    assistantLoading.value = false
+  }
+}
+
+function handleOutsideClick(e) {
+  if (aiSearchWrap.value && !aiSearchWrap.value.contains(e.target)) {
+    showResults.value = false
+  }
 }
 
 async function handleLogout() {
@@ -162,6 +239,9 @@ async function handleLogout() {
   toast.info('Signed out successfully')
   router.push('/')
 }
+
+onMounted(() => document.addEventListener('click', handleOutsideClick, true))
+onBeforeUnmount(() => document.removeEventListener('click', handleOutsideClick, true))
 </script>
 
 <style scoped>
@@ -171,5 +251,81 @@ async function handleLogout() {
   display: flex; align-items: center; justify-content: center;
   font-size: .78rem; font-weight: 700; color: var(--navy);
   border: 2px solid rgba(201,169,110,.4);
+}
+
+/* AI Search */
+.ai-search-wrap {
+  max-width: 420px;
+}
+.ai-search-prefix {
+  background: var(--navy-light);
+  border-color: var(--navy-border);
+  border-right: none;
+}
+.ai-search-input {
+  border-left: none !important;
+  border-radius: 0 !important;
+}
+.ai-search-input:focus {
+  border-color: var(--gold) !important;
+  box-shadow: none !important;
+}
+.ai-search-input:focus ~ .ai-search-btn,
+.ai-search-input:focus + .ai-search-btn {
+  border-color: var(--gold);
+}
+.ai-search-btn {
+  border-radius: 0 2rem 2rem 0;
+  padding: 0 .9rem;
+}
+.ai-search-prefix {
+  border-radius: 2rem 0 0 2rem;
+}
+
+/* Results Dropdown */
+.ai-results-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--navy-card);
+  border: 1px solid var(--navy-border);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  padding: .85rem 1rem;
+  z-index: 1200;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.ai-answer {
+  font-size: .83rem;
+  color: var(--text-main);
+  line-height: 1.55;
+  margin: 0;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--navy-border);
+}
+.ai-product-item {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .45rem .5rem;
+  border-radius: .6rem;
+  text-decoration: none;
+  transition: background .12s;
+}
+.ai-product-item:hover {
+  background: rgba(201,169,110,.07);
+}
+.ai-product-img-wrap {
+  width: 38px; height: 38px;
+  border-radius: .5rem;
+  overflow: hidden;
+  background: var(--navy-light);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.ai-product-img-wrap img {
+  width: 100%; height: 100%; object-fit: cover;
 }
 </style>

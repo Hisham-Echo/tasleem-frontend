@@ -1,7 +1,6 @@
 <template>
   <div class="auth-page">
-
-    <!-- Left decorative panel (desktop only) -->
+    <!-- Left decorative panel -->
     <div class="auth-panel d-none d-lg-flex align-items-center justify-content-center p-5">
       <div class="auth-panel-content text-center">
         <div class="big-text mb-3">تسليم</div>
@@ -24,11 +23,9 @@
 
     <!-- Right panel: form -->
     <div class="d-flex align-items-center justify-content-center p-4 p-lg-5"
-      style="flex:0 0 auto;width:100%;overflow-y:auto;" :style="{ maxWidth: 'min(100%, 540px)' }">
+      style="flex:0 0 auto;width:100%;overflow-y:auto;" :style="{ maxWidth: 'min(100%, 560px)' }">
 
-      <div class="auth-card w-100" style="max-width:460px;">
-
-        <!-- Logo -->
+      <div class="auth-card w-100" style="max-width:480px;">
         <div class="auth-logo">تسليم<span>.</span></div>
         <p class="text-muted mb-4" style="font-size:.875rem;margin-top:.25rem;">Create your account</p>
 
@@ -52,6 +49,21 @@
             </div>
           </div>
 
+          <!-- National ID -->
+          <div class="mb-3">
+            <label class="form-label">National ID</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-card-text"></i></span>
+              <input v-model="form.national_id" type="text" class="form-control" :class="{ 'is-invalid': errors.national_id }"
+                placeholder="14-digit national ID number" maxlength="14" inputmode="numeric"
+                @input="form.national_id = form.national_id.replace(/\D/g, '')" />
+              <div class="invalid-feedback">{{ errors.national_id }}</div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.73rem;">
+              <i class="bi bi-shield-lock me-1"></i>Your ID is encrypted and only used for identity verification
+            </div>
+          </div>
+
           <!-- Email -->
           <div class="mb-3">
             <label class="form-label">Email Address</label>
@@ -63,15 +75,33 @@
             </div>
           </div>
 
-          <!-- Phone -->
+          <!-- Phone + Country Code -->
           <div class="mb-3">
             <label class="form-label">Phone Number</label>
-            <div class="input-group">
-              <span class="input-group-text"><i class="bi bi-phone"></i></span>
+            <div class="input-group" :class="{ 'is-invalid': errors.phone }">
+              <!-- Country code selector -->
+              <button type="button" class="btn country-code-btn dropdown-toggle d-flex align-items-center gap-1"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                style="background:var(--navy-light);border:1px solid var(--navy-border);border-right:none;border-radius:.5rem 0 0 .5rem;padding:.5rem .7rem;color:var(--text-main);font-size:.88rem;white-space:nowrap;">
+                <span>{{ selectedCountry.flag }}</span>
+                <span class="text-gold">{{ selectedCountry.code }}</span>
+              </button>
+              <ul class="dropdown-menu country-dropdown" style="min-width:260px;max-height:280px;overflow-y:auto;">
+                <li v-for="c in countryCodes" :key="c.code">
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2"
+                    :class="{ active: selectedCountry.code === c.code }"
+                    @click="selectedCountry = c">
+                    <span style="font-size:1.1rem;">{{ c.flag }}</span>
+                    <span class="flex-grow-1">{{ c.name }}</span>
+                    <span class="text-gold" style="font-size:.82rem;">{{ c.code }}</span>
+                  </button>
+                </li>
+              </ul>
               <input v-model="form.phone" type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }"
-                placeholder="01234567890" autocomplete="tel" />
-              <div class="invalid-feedback">{{ errors.phone }}</div>
+                placeholder="10-digit number" autocomplete="tel" inputmode="numeric"
+                @input="form.phone = form.phone.replace(/\D/g, '')" />
             </div>
+            <div class="text-danger mt-1" style="font-size:.8rem;" v-if="errors.phone">{{ errors.phone }}</div>
           </div>
 
           <!-- Password -->
@@ -92,6 +122,9 @@
                 :style="{ background: n <= passwordStrength ? strengthColors[passwordStrength - 1] : 'var(--navy-border)' }">
               </div>
             </div>
+            <div class="text-muted mt-1" style="font-size:.73rem;" v-if="form.password">
+              {{ strengthLabels[passwordStrength - 1] || '' }}
+            </div>
           </div>
 
           <!-- Confirm Password -->
@@ -100,8 +133,7 @@
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
               <input v-model="form.password_confirmation" :type="showPw ? 'text' : 'password'" class="form-control"
-                :class="{ 'is-invalid': errors.password_confirmation }" placeholder="Repeat password"
-                autocomplete="new-password" />
+                :class="{ 'is-invalid': errors.password_confirmation }" placeholder="Repeat password" autocomplete="new-password" />
               <div class="invalid-feedback">{{ errors.password_confirmation }}</div>
             </div>
           </div>
@@ -150,14 +182,43 @@ const toast    = useToast()
 
 const showPw   = ref(false)
 const errorMsg = ref('')
+
+const countryCodes = [
+  { code: '+20',  name: 'Egypt',        flag: '🇪🇬' },
+  { code: '+966', name: 'Saudi Arabia', flag: '🇸🇦' },
+  { code: '+971', name: 'UAE',          flag: '🇦🇪' },
+  { code: '+974', name: 'Qatar',        flag: '🇶🇦' },
+  { code: '+965', name: 'Kuwait',       flag: '🇰🇼' },
+  { code: '+973', name: 'Bahrain',      flag: '🇧🇭' },
+  { code: '+968', name: 'Oman',         flag: '🇴🇲' },
+  { code: '+962', name: 'Jordan',       flag: '🇯🇴' },
+  { code: '+961', name: 'Lebanon',      flag: '🇱🇧' },
+  { code: '+44',  name: 'UK',           flag: '🇬🇧' },
+  { code: '+1',   name: 'USA / Canada', flag: '🇺🇸' },
+  { code: '+49',  name: 'Germany',      flag: '🇩🇪' },
+  { code: '+33',  name: 'France',       flag: '🇫🇷' },
+]
+
+const selectedCountry = ref(countryCodes[0]) // default Egypt +20
+
 const form = reactive({
-  name: '', email: '', phone: '',
-  password: '', password_confirmation: '',
-  terms: false,
+  name:                  '',
+  national_id:           '',
+  email:                 '',
+  phone:                 '',
+  password:              '',
+  password_confirmation: '',
+  terms:                 false,
 })
+
 const errors = reactive({
-  name: '', email: '', phone: '',
-  password: '', password_confirmation: '', terms: '',
+  name:                  '',
+  national_id:           '',
+  email:                 '',
+  phone:                 '',
+  password:              '',
+  password_confirmation: '',
+  terms:                 '',
 })
 
 const perks = [
@@ -168,6 +229,7 @@ const perks = [
 ]
 
 const strengthColors = ['#e74c3c', '#f39c12', '#3498db', '#2ecc71']
+const strengthLabels = ['Weak', 'Fair', 'Good', 'Strong']
 
 const passwordStrength = computed(() => {
   const p = form.password
@@ -183,26 +245,38 @@ const passwordStrength = computed(() => {
 function validate() {
   Object.keys(errors).forEach(k => errors[k] = '')
   let valid = true
-  if (!form.name.trim())        { errors.name   = 'Full name is required'; valid = false }
-  if (!form.email)              { errors.email  = 'Email is required'; valid = false }
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-                                { errors.email  = 'Enter a valid email'; valid = false }
-  if (!form.phone)              { errors.phone  = 'Phone number is required'; valid = false }
-  else if (!/^[\d\+\-\s]{7,15}$/.test(form.phone))
-                                { errors.phone  = 'Enter a valid phone number'; valid = false }
-  if (!form.password)           { errors.password = 'Password is required'; valid = false }
-  else if (form.password.length < 8)
-                                { errors.password = 'Minimum 8 characters'; valid = false }
-  if (form.password !== form.password_confirmation)
-                                { errors.password_confirmation = 'Passwords do not match'; valid = false }
-  if (!form.terms)              { errors.terms  = 'You must accept the terms'; valid = false }
+
+  if (!form.name.trim())       { errors.name = 'Full name is required'; valid = false }
+
+  if (!form.national_id)       { errors.national_id = 'National ID is required'; valid = false }
+  else if (!/^\d{14}$/.test(form.national_id)) { errors.national_id = 'Must be exactly 14 digits'; valid = false }
+
+  if (!form.email)             { errors.email = 'Email is required'; valid = false }
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { errors.email = 'Enter a valid email'; valid = false }
+
+  if (!form.phone)             { errors.phone = 'Phone number is required'; valid = false }
+  else if (!/^\d{7,15}$/.test(form.phone)) { errors.phone = 'Enter a valid phone number'; valid = false }
+
+  if (!form.password)          { errors.password = 'Password is required'; valid = false }
+  else if (form.password.length < 8) { errors.password = 'Minimum 8 characters'; valid = false }
+
+  if (form.password !== form.password_confirmation) { errors.password_confirmation = 'Passwords do not match'; valid = false }
+
+  if (!form.terms)             { errors.terms = 'You must accept the terms'; valid = false }
+
   return valid
 }
 
 async function onSubmit() {
   errorMsg.value = ''
   if (!validate()) return
-  const { terms, ...payload } = form
+
+  const { terms, ...rest } = form
+  const payload = {
+    ...rest,
+    phone: `${selectedCountry.value.code}${form.phone}`,
+  }
+
   const res = await auth.register(payload)
   if (res.success) {
     toast.success('Account created! Welcome to Tasleem 🎉')
@@ -218,3 +292,16 @@ async function onSubmit() {
   }
 }
 </script>
+
+<style scoped>
+.country-code-btn {
+  min-width: 80px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.country-code-btn:focus { box-shadow: 0 0 0 .2rem rgba(201,169,110,.2); outline: none; }
+.country-dropdown { background: var(--navy-card); border: 1px solid var(--navy-border); }
+.country-dropdown .dropdown-item { color: var(--text-main); font-size: .85rem; padding: .45rem .85rem; gap: .5rem; }
+.country-dropdown .dropdown-item:hover { background: rgba(201,169,110,.08); color: var(--cream); }
+.country-dropdown .dropdown-item.active { background: rgba(201,169,110,.15); color: var(--gold); }
+</style>
