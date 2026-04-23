@@ -12,3 +12,4 @@ dist
 *.njsproj
 *.sln
 *.sw?
+BACKEND_CONNECT.md
