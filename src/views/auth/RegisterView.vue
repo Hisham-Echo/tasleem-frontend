@@ -50,6 +50,7 @@
           </div>
 
           <!-- National ID -->
+          <!--
           <div class="mb-3">
             <label class="form-label">National ID</label>
             <div class="input-group">
@@ -62,7 +63,7 @@
             <div class="text-muted mt-1" style="font-size:.73rem;">
               <i class="bi bi-shield-lock me-1"></i>Your ID is encrypted and only used for identity verification
             </div>
-          </div>
+          </div> -->
 
           <!-- Email -->
           <div class="mb-3">
@@ -203,7 +204,7 @@ const selectedCountry = ref(countryCodes[0]) // default Egypt +20
 
 const form = reactive({
   name:                  '',
-  national_id:           '',
+  // national_id:           '',
   email:                 '',
   phone:                 '',
   password:              '',
@@ -213,7 +214,7 @@ const form = reactive({
 
 const errors = reactive({
   name:                  '',
-  national_id:           '',
+  // national_id:           '',
   email:                 '',
   phone:                 '',
   password:              '',
@@ -248,8 +249,8 @@ function validate() {
 
   if (!form.name.trim())       { errors.name = 'Full name is required'; valid = false }
 
-  if (!form.national_id)       { errors.national_id = 'National ID is required'; valid = false }
-  else if (!/^\d{14}$/.test(form.national_id)) { errors.national_id = 'Must be exactly 14 digits'; valid = false }
+  // if (!form.national_id)       { errors.national_id = 'National ID is required'; valid = false }
+  // else if (!/^\d{14}$/.test(form.national_id)) { errors.national_id = 'Must be exactly 14 digits'; valid = false }
 
   if (!form.email)             { errors.email = 'Email is required'; valid = false }
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { errors.email = 'Enter a valid email'; valid = false }
