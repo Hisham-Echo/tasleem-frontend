@@ -1,6 +1,5 @@
 <template>
   <div class="auth-page">
-
     <!-- Left decorative panel (desktop only) -->
     <div class="auth-panel d-none d-lg-flex align-items-center justify-content-center p-5">
       <div class="auth-panel-content text-center">
@@ -23,16 +22,22 @@
 
     <!-- Right panel: form -->
     <div class="d-flex align-items-center justify-content-center p-4 p-lg-5"
-      style="flex:0 0 auto;width:100%;max-width:100%;" :style="{ maxWidth: 'min(100%, 520px)' }">
+      style="flex: 0 0 auto; width: 100%; max-width: 100%;" :style="{ maxWidth: 'min(100%, 520px)' }">
 
       <div class="auth-card w-100">
-
         <!-- Logo -->
         <div class="auth-logo">تسليم<span>.</span></div>
         <p class="text-muted mb-4" style="font-size:.875rem;margin-top:.25rem;">Sign in to your account</p>
 
-        <!-- Error -->
-        <div v-if="errorMsg" class="alert mb-3 py-2 px-3 d-flex align-items-center gap-2"
+        <!-- Lockout Warning -->
+        <div v-if="isLockedOut" class="alert mb-3 py-2 px-3 d-flex align-items-center gap-2"
+          style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);border-radius:.6rem;font-size:.85rem;color:#e74c3c;">
+          <i class="bi bi-exclamation-circle-fill flex-shrink-0"></i>
+          <span>Too many failed attempts. Please try again in <strong>{{ countdown }}</strong> seconds.</span>
+        </div>
+
+        <!-- Standard Error -->
+        <div v-else-if="errorMsg" class="alert mb-3 py-2 px-3 d-flex align-items-center gap-2"
           style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);border-radius:.6rem;font-size:.85rem;color:#e74c3c;">
           <i class="bi bi-exclamation-circle-fill flex-shrink-0"></i>
           <span>{{ errorMsg }}</span>
@@ -51,6 +56,7 @@
                 :class="{ 'is-invalid': errors.email }"
                 placeholder="you@example.com"
                 autocomplete="email"
+                :disabled="isLockedOut"
               />
               <div class="invalid-feedback">{{ errors.email }}</div>
             </div>
@@ -71,22 +77,22 @@
                 :class="{ 'is-invalid': errors.password }"
                 placeholder="••••••••"
                 autocomplete="current-password"
+                :disabled="isLockedOut"
               />
-              <button type="button" class="input-group-text" style="cursor:pointer;" @click="showPw = !showPw">
+              <button type="button" class="input-group-text" style="cursor:pointer;" @click="showPw = !showPw" :disabled="isLockedOut">
                 <i :class="showPw ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
               </button>
               <div class="invalid-feedback">{{ errors.password }}</div>
             </div>
           </div>
 
-          <button type="submit" class="btn btn-gold w-100 py-2" :disabled="auth.loading">
+          <button type="submit" class="btn btn-gold w-100 py-2" :disabled="isLockedOut || auth.loading">
             <span class="spinner-border spinner-border-sm me-2" v-if="auth.loading"></span>
             {{ auth.loading ? 'Signing in...' : 'Sign In' }}
           </button>
         </form>
 
         <div class="or-divider">or</div>
-
         <p class="text-center mb-0 text-muted" style="font-size:.9rem;">
           Don't have an account?
           <RouterLink class="text-gold text-decoration-none fw-500" to="/register">Create one</RouterLink>
@@ -103,6 +109,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useToast } from 'vue-toastification'
+import { useAuthLockout } from '@/composables/useAuthLockout' // <-- Added Lockout
 
 const router   = useRouter()
 const route    = useRoute()
@@ -111,8 +118,11 @@ const cart     = useCartStore()
 const wishlist = useWishlistStore()
 const toast    = useToast()
 
-const form   = reactive({ email: '', password: '' })
-const errors = reactive({ email: '', password: '' })
+// Initialize lockout (3 attempts, 60 seconds)
+const { isLockedOut, countdown, recordFailure, recordSuccess } = useAuthLockout(3, 60)
+
+const form    = reactive({ email: '', password: '' })
+const errors  = reactive({ email: '', password: '' })
 const errorMsg = ref('')
 const showPw   = ref(false)
 
@@ -135,14 +145,19 @@ function validate() {
 }
 
 async function onSubmit() {
+  if (isLockedOut.value) return // Prevent submission if locked out
+  
   errorMsg.value = ''
   if (!validate()) return
+
   const res = await auth.login(form)
   if (res.success) {
+    recordSuccess() // Reset attempts on successful login
     toast.success('Welcome back!')
     await Promise.all([cart.fetchCart(), wishlist.fetchWishlist()])
     router.push(route.query.redirect || '/')
   } else {
+    recordFailure() // Increment attempts on failed login
     errorMsg.value = res.message
   }
 }
