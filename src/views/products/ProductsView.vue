@@ -281,6 +281,7 @@ onMounted(async () => {
   try {
     const catRes = await categoryService.getAll()
     categories.value = catRes.data?.data || catRes.data || []
+    console.log('Categories from API:', categories.value)
   } catch (e) {
     console.error('Failed to load categories:', e)
   }
