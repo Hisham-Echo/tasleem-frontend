@@ -26,7 +26,13 @@
             <!-- Search -->
             <div class="mb-3">
               <label class="form-label">Search</label>
-              <input v-model="filters.search" type="search" class="form-control form-control-sm" placeholder="Search products..." @input="debouncedFetch" />
+              <input 
+                v-model="filters.search" 
+                type="search" 
+                class="form-control form-control-sm" 
+                placeholder="Search products..." 
+                @input="debouncedFetch" 
+              />
             </div>
 
             <!-- Category -->
@@ -35,7 +41,7 @@
               <select 
                 v-model="filters.category_id" 
                 class="form-select form-select-sm" 
-                @change="fetchProducts(1)"
+                @change="onCategoryChange"
               >
                 <option value="">All Categories</option>
                 <option 
@@ -51,24 +57,45 @@
             <!-- Rentable toggle -->
             <div class="mb-3">
               <div class="form-check">
-                <input class="form-check-input" type="checkbox" v-model="filters.rentable" id="rentable" @change="fetchProducts(1)" />
+                <input 
+                  class="form-check-input" 
+                  type="checkbox" 
+                  v-model="filters.rentable" 
+                  id="rentable" 
+                  @change="fetchProducts(1)" 
+                />
                 <label class="form-check-label text-muted" for="rentable">Rentable only</label>
               </div>
             </div>
 
             <!-- Price range -->
             <div class="mb-3">
-              <label class="form-label">Max Price: <span class="text-gold">{{ formatPrice(filters.max_price) }}</span></label>
-              <input type="range" class="form-range" v-model="filters.max_price" min="0" max="50000" step="100" @change="fetchProducts(1)" />
+              <label class="form-label">
+                Max Price: <span class="text-gold">{{ formatPrice(filters.max_price) }}</span>
+              </label>
+              <input 
+                type="range" 
+                class="form-range" 
+                v-model="filters.max_price" 
+                min="0" 
+                max="50000" 
+                step="100" 
+                @change="fetchProducts(1)" 
+              />
               <div class="d-flex justify-content-between text-muted" style="font-size:.75rem;">
-                <span>0</span><span>50,000 EGP</span>
+                <span>0</span>
+                <span>50,000 EGP</span>
               </div>
             </div>
 
             <!-- Sort -->
             <div>
               <label class="form-label">Sort By</label>
-              <select v-model="filters.sort" class="form-select form-select-sm" @change="fetchProducts(1)">
+              <select 
+                v-model="filters.sort" 
+                class="form-select form-select-sm" 
+                @change="fetchProducts(1)"
+              >
                 <option value="">Default (Newest)</option>
                 <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
@@ -90,10 +117,18 @@
               <span v-else>Loading...</span>
             </div>
             <div class="d-flex align-items-center gap-2">
-              <button class="btn btn-sm" :class="viewMode === 'grid' ? 'btn-gold' : 'btn-outline-gold'" @click="viewMode = 'grid'">
+              <button 
+                class="btn btn-sm" 
+                :class="viewMode === 'grid' ? 'btn-gold' : 'btn-outline-gold'" 
+                @click="viewMode = 'grid'"
+              >
                 <i class="bi bi-grid-3x3-gap"></i>
               </button>
-              <button class="btn btn-sm" :class="viewMode === 'list' ? 'btn-gold' : 'btn-outline-gold'" @click="viewMode = 'list'">
+              <button 
+                class="btn btn-sm" 
+                :class="viewMode === 'list' ? 'btn-gold' : 'btn-outline-gold'" 
+                @click="viewMode = 'list'"
+              >
                 <i class="bi bi-list"></i>
               </button>
             </div>
@@ -111,10 +146,21 @@
 
           <!-- List view -->
           <div class="d-flex flex-column gap-3" v-else>
-            <div class="card card-hover p-0 overflow-hidden" v-for="product in products" :key="product.id" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor:pointer;">
+            <div 
+              class="card card-hover p-0 overflow-hidden" 
+              v-for="product in products" 
+              :key="product.id" 
+              @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" 
+              style="cursor:pointer;"
+            >
               <div class="d-flex">
                 <div style="width:140px; flex-shrink:0; background:var(--navy-light); height:120px; overflow:hidden;">
-                  <img :src="getProductImage(product)" :alt="product.name" style="width:100%; height:100%; object-fit:cover;" v-if="getProductImage(product)" />
+                  <img 
+                    :src="getProductImage(product)" 
+                    :alt="product.name" 
+                    style="width:100%; height:100%; object-fit:cover;" 
+                    v-if="getProductImage(product)" 
+                  />
                   <div class="d-flex align-items-center justify-content-center h-100" v-else>
                     <i class="bi bi-image text-muted fs-3"></i>
                   </div>
@@ -123,7 +169,9 @@
                   <div>
                     <span class="badge badge-gold mb-1" v-if="product.category">{{ product.category?.name }}</span>
                     <h6 class="text-cream mb-1">{{ product.name }}</h6>
-                    <p class="text-muted mb-0" style="font-size:.82rem; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ product.description?.slice(0, 80) }}...</p>
+                    <p class="text-muted mb-0" style="font-size:.82rem; display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+                      {{ product.description?.slice(0, 80) }}...
+                    </p>
                   </div>
                   <div class="text-end ms-3 flex-shrink-0">
                     <div class="product-price mb-2">{{ formatPrice(product.price) }}</div>
@@ -152,9 +200,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { productService, categoryService } from '@/services/api'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { productService, categoryService, aiService } from '@/services/api'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
@@ -163,6 +211,7 @@ import ProductSkeleton from '@/components/ui/ProductSkeleton.vue'
 import Pagination from '@/components/ui/Pagination.vue'
 
 const route = useRoute()
+const router = useRouter()
 const cart = useCartStore()
 const auth = useAuthStore()
 const toast = useToast()
@@ -175,9 +224,9 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const viewMode = ref('grid')
 
+// FIX: Initialize category_id as empty string
 const filters = reactive({
   search: route.query.search || '',
-  // Ensure it's a string to match the dropdown :value
   category_id: route.query.category_id ? String(route.query.category_id) : '',
   rentable: route.query.rentable === '1',
   max_price: 50000,
@@ -191,7 +240,11 @@ function debouncedFetch() {
 }
 
 function formatPrice(val) {
-  return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(val || 0)
+  return new Intl.NumberFormat('en-EG', { 
+    style: 'currency', 
+    currency: 'EGP', 
+    maximumFractionDigits: 0 
+  }).format(val || 0)
 }
 
 function getProductImage(product) {
@@ -201,7 +254,6 @@ function getProductImage(product) {
   return product.image || null
 }
 
-// Convert sort filter value to backend parameters
 function getSortParams(sortValue) {
   const sortMap = {
     'price_asc': { sort_by: 'price', sort_order: 'asc' },
@@ -214,9 +266,18 @@ function getSortParams(sortValue) {
   return sortMap[sortValue] || { sort_by: 'created_at', sort_order: 'desc' }
 }
 
+// FIX: Explicit handler for category change
+function onCategoryChange(event) {
+  const value = event.target.value
+  console.log('Category changed to:', value)
+  filters.category_id = value
+  fetchProducts(1)
+}
+
 async function fetchProducts(page = 1) {
   loading.value = true
   currentPage.value = page
+  
   try {
     const sortParams = getSortParams(filters.sort)
     
@@ -224,20 +285,22 @@ async function fetchProducts(page = 1) {
       page,
       per_page: 9,
       search: filters.search || undefined,
-      // Only send category_id if it's not an empty string
-      category_id: filters.category_id || undefined,
+      // FIX: Only include category_id if it's not empty
+      category_id: (filters.category_id && filters.category_id !== '') ? filters.category_id : undefined,
       type: filters.rentable ? 'rental' : undefined,
       max_price: filters.max_price < 50000 ? filters.max_price : undefined,
       sort_by: sortParams.sort_by,
       sort_order: sortParams.sort_order
     }
     
-    // Remove undefined values so they don't pollute the URL/API call
+    // Remove undefined values
     Object.keys(params).forEach(key => {
-      if (params[key] === undefined) {
+      if (params[key] === undefined || params[key] === null || params[key] === '') {
         delete params[key]
       }
     })
+    
+    console.log('Fetching products with params:', params)
     
     const res = await productService.getAll(params)
     const data = res.data?.data || res.data
@@ -281,9 +344,15 @@ onMounted(async () => {
   try {
     const catRes = await categoryService.getAll()
     categories.value = catRes.data?.data || catRes.data || []
-    console.log('Categories from API:', categories.value)
+    
+    // DEBUG: Log categories to see their structure
+    console.log('Categories loaded:', categories.value)
+    if (categories.value.length > 0) {
+      console.log('First category structure:', categories.value[0])
+    }
   } catch (e) {
     console.error('Failed to load categories:', e)
+    toast.error('Failed to load categories')
   }
   
   await fetchProducts(1)
