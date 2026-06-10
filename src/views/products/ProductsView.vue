@@ -32,9 +32,19 @@
             <!-- Category -->
             <div class="mb-3">
               <label class="form-label">Category</label>
-              <select v-model="filters.category_id" class="form-select form-select-sm" @change="fetchProducts(1)">
+              <select 
+                v-model="filters.category_id" 
+                class="form-select form-select-sm" 
+                @change="fetchProducts(1)"
+              >
                 <option value="">All Categories</option>
-                <option v-for="cat in categories" :key="cat.category_id" :value="cat.category_id">{{ cat.name }}</option>
+                <option 
+                  v-for="cat in categories" 
+                  :key="cat.id || cat.category_id" 
+                  :value="String(cat.id || cat.category_id)"
+                >
+                  {{ cat.name }}
+                </option>
               </select>
             </div>
 
@@ -167,7 +177,8 @@ const viewMode = ref('grid')
 
 const filters = reactive({
   search: route.query.search || '',
-  category_id: route.query.category_id || '',
+  // Ensure it's a string to match the dropdown :value
+  category_id: route.query.category_id ? String(route.query.category_id) : '',
   rentable: route.query.rentable === '1',
   max_price: 50000,
   sort: ''
@@ -213,16 +224,15 @@ async function fetchProducts(page = 1) {
       page,
       per_page: 9,
       search: filters.search || undefined,
+      // Only send category_id if it's not an empty string
       category_id: filters.category_id || undefined,
-      // FIX: Backend expects 'type' not 'is_rentable'
-      type: filters.rentable ? 'rental' : undefined, // or could be 'both'
+      type: filters.rentable ? 'rental' : undefined,
       max_price: filters.max_price < 50000 ? filters.max_price : undefined,
-      // FIX: Backend expects separate sort_by and sort_order
       sort_by: sortParams.sort_by,
       sort_order: sortParams.sort_order
     }
     
-    // Remove undefined values
+    // Remove undefined values so they don't pollute the URL/API call
     Object.keys(params).forEach(key => {
       if (params[key] === undefined) {
         delete params[key]
