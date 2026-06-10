@@ -34,7 +34,7 @@
               <label class="form-label">Category</label>
               <select v-model="filters.category_id" class="form-select form-select-sm" @change="fetchProducts(1)">
                 <option value="">All Categories</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                <option v-for="cat in categories" :key="cat.category_id" :value="cat.category_id">{{ cat.name }}</option>
               </select>
             </div>
 
@@ -59,11 +59,13 @@
             <div>
               <label class="form-label">Sort By</label>
               <select v-model="filters.sort" class="form-select form-select-sm" @change="fetchProducts(1)">
-                <option value="">Default</option>
+                <option value="">Default (Newest)</option>
                 <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
                 <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
                 <option value="rating">Top Rated</option>
+                <option value="popular">Most Popular</option>
               </select>
             </div>
           </div>
@@ -102,7 +104,7 @@
             <div class="card card-hover p-0 overflow-hidden" v-for="product in products" :key="product.id" @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor:pointer;">
               <div class="d-flex">
                 <div style="width:140px; flex-shrink:0; background:var(--navy-light); height:120px; overflow:hidden;">
-                  <img :src="product.image" :alt="product.name" style="width:100%; height:100%; object-fit:cover;" v-if="product.image" />
+                  <img :src="getProductImage(product)" :alt="product.name" style="width:100%; height:100%; object-fit:cover;" v-if="getProductImage(product)" />
                   <div class="d-flex align-items-center justify-content-center h-100" v-else>
                     <i class="bi bi-image text-muted fs-3"></i>
                   </div>
@@ -111,7 +113,7 @@
                   <div>
                     <span class="badge badge-gold mb-1" v-if="product.category">{{ product.category?.name }}</span>
                     <h6 class="text-cream mb-1">{{ product.name }}</h6>
-                    <p class="text-muted mb-0" style="font-size:.82rem; line-clamp:2;">{{ product.description?.slice(0, 80) }}...</p>
+                    <p class="text-muted mb-0" style="font-size:.82rem; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ product.description?.slice(0, 80) }}...</p>
                   </div>
                   <div class="text-end ms-3 flex-shrink-0">
                     <div class="product-price mb-2">{{ formatPrice(product.price) }}</div>
@@ -181,36 +183,79 @@ function formatPrice(val) {
   return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(val || 0)
 }
 
+function getProductImage(product) {
+  if (product.images && product.images.length > 0) {
+    return product.images[0].url || product.images[0]
+  }
+  return product.image || null
+}
+
+// Convert sort filter value to backend parameters
+function getSortParams(sortValue) {
+  const sortMap = {
+    'price_asc': { sort_by: 'price', sort_order: 'asc' },
+    'price_desc': { sort_by: 'price', sort_order: 'desc' },
+    'newest': { sort_by: 'created_at', sort_order: 'desc' },
+    'oldest': { sort_by: 'created_at', sort_order: 'asc' },
+    'rating': { sort_by: 'rate', sort_order: 'desc' },
+    'popular': { sort_by: 'view_count', sort_order: 'desc' }
+  }
+  return sortMap[sortValue] || { sort_by: 'created_at', sort_order: 'desc' }
+}
+
 async function fetchProducts(page = 1) {
   loading.value = true
   currentPage.value = page
   try {
+    const sortParams = getSortParams(filters.sort)
+    
     const params = {
       page,
       per_page: 9,
       search: filters.search || undefined,
       category_id: filters.category_id || undefined,
-      is_rentable: filters.rentable ? 1 : undefined,
+      // FIX: Backend expects 'type' not 'is_rentable'
+      type: filters.rentable ? 'rental' : undefined, // or could be 'both'
       max_price: filters.max_price < 50000 ? filters.max_price : undefined,
-      sort: filters.sort || undefined
+      // FIX: Backend expects separate sort_by and sort_order
+      sort_by: sortParams.sort_by,
+      sort_order: sortParams.sort_order
     }
+    
+    // Remove undefined values
+    Object.keys(params).forEach(key => {
+      if (params[key] === undefined) {
+        delete params[key]
+      }
+    })
+    
     const res = await productService.getAll(params)
-    const data = res.data
+    const data = res.data?.data || res.data
+    
     products.value = data.data || data || []
     total.value = data.total || products.value.length
     totalPages.value = data.last_page || Math.ceil(total.value / 9) || 1
   } catch (e) {
+    console.error('Failed to fetch products:', e)
     products.value = []
+    toast.error('Failed to load products')
   } finally {
     loading.value = false
   }
 }
 
 async function addToCart(product) {
-  if (!auth.isAuthenticated) { toast.info('Please sign in'); return }
+  if (!auth.isAuthenticated) { 
+    toast.info('Please sign in to add to cart')
+    return 
+  }
   const res = await cart.addItem(product.id)
-  if (res.success) { toast.success('Added to cart!'); cart.openCart() }
-  else toast.error(res.message)
+  if (res.success) { 
+    toast.success('Added to cart!')
+    cart.openCart() 
+  } else {
+    toast.error(res.message || 'Failed to add to cart')
+  }
 }
 
 function resetFilters() {
@@ -223,7 +268,13 @@ function resetFilters() {
 }
 
 onMounted(async () => {
-  const [catRes] = await Promise.all([categoryService.getAll(), fetchProducts(1)])
-  categories.value = catRes.data?.data || catRes.data || []
+  try {
+    const catRes = await categoryService.getAll()
+    categories.value = catRes.data?.data || catRes.data || []
+  } catch (e) {
+    console.error('Failed to load categories:', e)
+  }
+  
+  await fetchProducts(1)
 })
 </script>

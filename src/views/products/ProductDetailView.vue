@@ -43,23 +43,27 @@
             <!-- Category & badges -->
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
               <span class="badge badge-gold" v-if="product.category">{{ product.category?.name }}</span>
-              <span class="badge" style="background:rgba(46,204,113,.15); color:#2ecc71; border:1px solid rgba(46,204,113,.25);" v-if="product.stock > 0">In Stock ({{ product.stock }})</span>
+              <!-- FIX: Use quantity instead of stock -->
+              <span class="badge" style="background:rgba(46,204,113,.15); color:#2ecc71; border:1px solid rgba(46,204,113,.25);" v-if="product.quantity > 0">In Stock ({{ product.quantity }})</span>
               <span class="badge" style="background:rgba(231,76,60,.15); color:#e74c3c; border:1px solid rgba(231,76,60,.25);" v-else>Out of Stock</span>
-              <span class="badge badge-gold" v-if="product.is_rentable"><i class="bi bi-clock me-1"></i>Rentable</span>
+              <!-- FIX: Check type field instead of is_rentable -->
+              <span class="badge badge-gold" v-if="isRentable"><i class="bi bi-clock me-1"></i>Rentable</span>
             </div>
 
             <h1 class="text-cream mb-3" style="font-size:1.8rem;">{{ product.name }}</h1>
 
             <!-- Rating -->
-            <div class="d-flex align-items-center gap-3 mb-3" v-if="product.rating !== undefined">
-              <StarRating :rating="product.rating" :count="product.reviews_count || reviews.length" />
+            <!-- FIX: Use rate instead of rating -->
+            <div class="d-flex align-items-center gap-3 mb-3" v-if="product.rate !== undefined">
+              <StarRating :rating="product.rate" :count="product.reviews_count || reviews.length" />
             </div>
 
             <!-- Price -->
             <div class="mb-4">
               <span class="text-gold" style="font-size:2rem; font-weight:800;">{{ formatPrice(product.price) }}</span>
               <span class="text-muted ms-2 text-decoration-line-through" v-if="product.old_price">{{ formatPrice(product.old_price) }}</span>
-              <div class="text-muted mt-1" style="font-size:.85rem;" v-if="product.is_rentable && product.daily_rental_price">
+              <!-- FIX: Show rental price if rentable -->
+              <div class="text-muted mt-1" style="font-size:.85rem;" v-if="isRentable && product.daily_rental_price">
                 <i class="bi bi-clock me-1"></i>{{ formatPrice(product.daily_rental_price) }} / day for rental
               </div>
             </div>
@@ -82,10 +86,10 @@
                 </div>
               </div>
               <div class="d-flex gap-2 flex-wrap">
-                <button class="btn btn-gold px-4 py-2" @click="addToCart" :disabled="cartLoading || product.stock === 0">
+                <button class="btn btn-gold px-4 py-2" @click="addToCart" :disabled="cartLoading || product.quantity === 0">
                   <span class="spinner-border spinner-border-sm me-2" v-if="cartLoading"></span>
                   <i class="bi bi-bag-plus me-2" v-else></i>
-                  {{ product.stock === 0 ? 'Out of Stock' : 'Add to Cart' }}
+                  {{ product.quantity === 0 ? 'Out of Stock' : 'Add to Cart' }}
                 </button>
                 <button class="btn btn-outline-gold px-3 py-2" @click="toggleWishlist" :title="wishlist.isInWishlist(product.id) ? 'Remove from wishlist' : 'Add to wishlist'">
                   <i :class="wishlist.isInWishlist(product.id) ? 'bi bi-heart-fill text-danger' : 'bi bi-heart'"></i>
@@ -95,7 +99,8 @@
             </div>
 
             <!-- Rental section -->
-            <div v-if="product.is_rentable" class="card p-3 mt-3" style="border-radius:1rem; border-color:rgba(201,169,110,.25)!important;">
+            <!-- FIX: Use isRentable computed property -->
+            <div v-if="isRentable" class="card p-3 mt-3" style="border-radius:1rem; border-color:rgba(201,169,110,.25)!important;">
               <h6 class="text-gold mb-3"><i class="bi bi-clock-history me-2"></i>Rent This Item</h6>
               <div class="row g-2 mb-3">
                 <div class="col-6">
@@ -183,7 +188,7 @@
       <RouterLink class="btn btn-outline-gold mt-2" to="/products">Back to Products</RouterLink>
     </div>
   
-    <!-- ── Similar Products (AI) ──────────────────────────────────── -->
+    <!-- Similar Products -->
     <section class="py-5" v-if="similarProducts.length > 0" style="background:var(--navy);">
       <div class="container">
         <div class="d-flex align-items-center gap-2 mb-4">
@@ -211,6 +216,7 @@ import { useToast } from 'vue-toastification'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import ShareButton from '@/components/ui/ShareButton.vue'
+import ProductCard from '@/components/ui/ProductCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -223,6 +229,7 @@ const product = ref(null)
 const images = ref([])
 const selectedImage = ref(null)
 const reviews = ref([])
+const similarProducts = ref([])
 const loading = ref(true)
 const cartLoading = ref(false)
 const rentalLoading = ref(false)
@@ -232,6 +239,11 @@ const quantity = ref(1)
 const rental = ref({ start_date: '', end_date: '' })
 const newReview = ref({ rating: 0, comment: '' })
 const today = new Date().toISOString().split('T')[0]
+
+// FIX: Computed property to check if product is rentable based on type field
+const isRentable = computed(() => {
+  return product.value?.type === 'rental' || product.value?.type === 'both'
+})
 
 const rentalDays = computed(() => {
   if (!rental.value.start_date || !rental.value.end_date) return 0
@@ -248,7 +260,11 @@ function formatDate(d) {
 }
 
 async function addToCart() {
-  if (!auth.isAuthenticated) { toast.info('Please sign in'); router.push({ name: 'Login' }); return }
+  if (!auth.isAuthenticated) { 
+    toast.info('Please sign in')
+    router.push({ name: 'Login' })
+    return 
+  }
   cartLoading.value = true
   for (let i = 0; i < quantity.value; i++) {
     await cart.addItem(product.value.id)
@@ -259,24 +275,42 @@ async function addToCart() {
 }
 
 async function addRental() {
-  if (!auth.isAuthenticated) { toast.info('Please sign in'); router.push({ name: 'Login' }); return }
-  if (!rental.value.start_date || !rental.value.end_date) { toast.error('Please select rental dates'); return }
+  if (!auth.isAuthenticated) { 
+    toast.info('Please sign in')
+    router.push({ name: 'Login' })
+    return 
+  }
+  if (!rental.value.start_date || !rental.value.end_date) { 
+    toast.error('Please select rental dates')
+    return 
+  }
   rentalLoading.value = true
   const res = await cart.addRental(product.value.id, rental.value.start_date, rental.value.end_date)
   rentalLoading.value = false
-  if (res.success) { toast.success('Rental added to cart!'); cart.openCart() }
-  else toast.error(res.message)
+  if (res.success) { 
+    toast.success('Rental added to cart!')
+    cart.openCart() 
+  } else {
+    toast.error(res.message)
+  }
 }
 
 async function toggleWishlist() {
   const res = await wishlist.toggle(product.value.id)
-  if (res?.needsAuth) { toast.info('Please sign in'); router.push({ name: 'Login' }); return }
+  if (res?.needsAuth) { 
+    toast.info('Please sign in')
+    router.push({ name: 'Login' })
+    return 
+  }
   if (res?.added) toast.success('Added to wishlist')
   else if (res?.added === false) toast.info('Removed from wishlist')
 }
 
 async function submitReview() {
-  if (!newReview.value.rating) { toast.error('Please select a rating'); return }
+  if (!newReview.value.rating) { 
+    toast.error('Please select a rating')
+    return 
+  }
   submitReviewLoading.value = true
   try {
     await reviewService.create({ product_id: product.value.id, ...newReview.value })
@@ -302,6 +336,15 @@ async function fetchReviews() {
   }
 }
 
+async function fetchSimilarProducts() {
+  try {
+    const res = await productService.similar(product.value.id)
+    similarProducts.value = res.data?.data || res.data || []
+  } catch (_) {
+    similarProducts.value = []
+  }
+}
+
 onMounted(async () => {
   try {
     const [prodRes, imgRes] = await Promise.all([
@@ -311,7 +354,11 @@ onMounted(async () => {
     product.value = prodRes.data?.data || prodRes.data
     images.value = imgRes.data?.data || imgRes.data || []
     selectedImage.value = images.value[0]?.url || product.value?.image || null
-    await fetchReviews()
+    
+    await Promise.all([
+      fetchReviews(),
+      fetchSimilarProducts()
+    ])
   } catch (_) {
     product.value = null
   } finally {
