@@ -149,13 +149,25 @@ export const recommendationService = {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Logs (Fixes the build error!)
+// Logs
 // ─────────────────────────────────────────────────────────────
 export const logService = {
   getAll: (params) => api.get('/logs', { params }),
   getById: (id) => api.get(`/logs/${id}`),
   getForEntity: (entityType, entityId) => api.get(`/logs/entity/${entityType}/${entityId}`),
   getStats: () => api.get('/logs/stats'),
+}
+
+// ─────────────────────────────────────────────────────────────
+// Notifications (Fixes the current build error!)
+// ─────────────────────────────────────────────────────────────
+export const notificationService = {
+  getAll: (params) => api.get('/notifications', { params }),
+  getById: (id) => api.get(`/notifications/${id}`),
+  markAsRead: (id) => api.post(`/notifications/${id}/read`),
+  markAllAsRead: () => api.post('/notifications/read-all'),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  delete: (id) => api.delete(`/notifications/${id}`),
 }
 
 // ─────────────────────────────────────────────────────────────
