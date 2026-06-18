@@ -145,7 +145,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { productService, categoryService, aiService } from '@/services/api'
+import { productService, categoryService, recommendationService } from '@/services/api'
 import ProductCard from '@/components/ui/ProductCard.vue'
 import ProductSkeleton from '@/components/ui/ProductSkeleton.vue'
 
@@ -162,83 +162,45 @@ const trendingLoading = ref(true)
 const exploreLoading = ref(false)
 const recLoading = ref(false)
 
-// Load trending products using AI service (with fallback)
+// Load trending products (Using most viewed since AI service is not integrated)
 async function loadTrending() {
   trendingLoading.value = true
   try {
-    const res = await aiService.trending(8)
-    const products = res.data?.data?.products || []
-    if (products.length > 0) {
-      trendingProducts.value = products
-      return
-    }
-    throw new Error('No products returned')
+    const res = await productService.getAll({ sort_by: 'view_count', sort_order: 'desc', per_page: 8 })
+    trendingProducts.value = res.data?.data || []
   } catch (e) {
-    console.warn('AI trending not available, using fallback:', e.message)
-    // Fallback to newest products
-    try {
-      const fallback = await productService.getAll({ 
-        sort_by: 'created_at', 
-        sort_order: 'desc', 
-        per_page: 8 
-      })
-      trendingProducts.value = fallback.data?.data?.data || fallback.data?.data || []
-    } catch (err) {
-      console.error('Fallback also failed:', err)
-      trendingProducts.value = []
-    }
+    console.error('Failed to load trending:', e)
+    trendingProducts.value = []
   } finally {
     trendingLoading.value = false
   }
 }
 
-// Load explore products using AI service (with fallback)
+// Load explore products (Using newest products)
 async function loadExplore() {
   exploreLoading.value = true
   try {
-    const res = await aiService.explore(8)
-    const products = res.data?.data?.products || []
-    if (products.length > 0) {
-      exploreProducts.value = products
-      return
-    }
-    throw new Error('No products returned')
+    const res = await productService.getAll({ sort_by: 'created_at', sort_order: 'desc', per_page: 8 })
+    exploreProducts.value = res.data?.data || []
   } catch (e) {
-    console.warn('AI explore not available, using fallback:', e.message)
-    // Fallback to popular products
-    try {
-      const fallback = await productService.getAll({ 
-        sort_by: 'view_count', 
-        sort_order: 'desc', 
-        per_page: 8 
-      })
-      exploreProducts.value = fallback.data?.data?.data || fallback.data?.data || []
-    } catch (err) {
-      console.error('Fallback also failed:', err)
-      exploreProducts.value = []
-    }
+    console.error('Failed to load explore:', e)
+    exploreProducts.value = []
   } finally {
     exploreLoading.value = false
   }
 }
 
-// Load personalized recommendations using AI service (with fallback)
+// Load personalized recommendations (From database table)
 async function loadRecommendations() {
   if (!auth.isAuthenticated || !auth.user?.id) return
   
   recLoading.value = true
   try {
-    const res = await aiService.forUser()
-    const products = res.data?.data?.products || []
-    if (products.length > 0) {
-      recommendations.value = products
-      recSection.value = res.data?.data?.section || 'Recommended for You'
-      return
-    }
-    throw new Error('No products returned')
+    const res = await recommendationService.getAll({ user_id: auth.user.id })
+    recommendations.value = res.data?.data || []
+    recSection.value = 'Recommended for You'
   } catch (e) {
-    console.warn('AI recommendations not available, using fallback:', e.message)
-    // Fallback to featured products
+    console.warn('Recommendations not available, using fallback:', e.message)
     recommendations.value = featuredProducts.value.slice(0, 8)
     recSection.value = 'Featured Products'
   } finally {
@@ -247,14 +209,13 @@ async function loadRecommendations() {
 }
 
 onMounted(async () => {
-  // Load categories and featured products
   try {
     const [catRes, featuredRes] = await Promise.all([
       categoryService.getAll(),
       productService.getAll({ per_page: 8, sort_by: 'created_at', sort_order: 'desc' })
     ])
     categories.value = catRes.data?.data || catRes.data || []
-    featuredProducts.value = featuredRes.data?.data?.data || featuredRes.data?.data || []
+    featuredProducts.value = featuredRes.data?.data || []
   } catch (e) {
     console.error('Failed to load initial data:', e)
   } finally {
@@ -262,13 +223,11 @@ onMounted(async () => {
     categoriesLoading.value = false
   }
 
-  // Load AI-powered sections (will gracefully fallback if not available)
   loadTrending()
   loadExplore()
   loadRecommendations()
 })
 
-// Reload recommendations when user logs in
 watch(() => auth.isAuthenticated, (isAuth) => {
   if (isAuth) {
     loadRecommendations()

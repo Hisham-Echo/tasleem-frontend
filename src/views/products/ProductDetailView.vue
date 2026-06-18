@@ -224,7 +224,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { productService, aiService, imageService, reviewService } from '@/services/api'
+import { productService, imageService, reviewService } from '@/services/api'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
@@ -292,16 +292,9 @@ function getImageUrl(img) {
   if (!img) return null
   const url = img.image_url || img.url || img
   if (url && !url.startsWith('http')) {
-    return `https://tasleembackendapifinal-production.up.railway.app/${url}`
+    return `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
   }
   return url
-}
-
-function getProductImage(product) {
-  if (product.images && product.images.length > 0) {
-    return getImageUrl(product.images[0])
-  }
-  return product.image || null
 }
 
 function scrollCarousel(direction) {
@@ -317,12 +310,10 @@ async function addToCart() {
     router.push({ name: 'Login' })
     return 
   }
-  
   if (!product.value || product.value.quantity === 0) {
     toast.error('Product is out of stock')
     return
   }
-  
   cartLoading.value = true
   try {
     await cart.addItem({
@@ -339,44 +330,27 @@ async function addToCart() {
   }
 }
 
-async function addRental() {
-  if (!auth.isAuthenticated) { 
-    toast.info('Please sign in')
-    router.push({ name: 'Login' })
-    return 
-  }
-  if (!rental.value.start_date || !rental.value.end_date) { 
-    toast.error('Please select rental dates')
-    return 
-  }
-  rentalLoading.value = true
-  try {
-    await cart.addRental({
-      product_id: product.value.id,
-      quantity: 1,
-      rental_start_date: rental.value.start_date,
-      rental_end_date: rental.value.end_date,
-      item_type: 'rental'
-    })
-    toast.success('Rental added to cart!')
-    cart.openCart()
-  } catch (error) {
-    toast.error(error.response?.data?.message || 'Failed to add rental')
-  } finally {
-    rentalLoading.value = false
-  }
-}
-
 async function toggleWishlist() {
   if (!auth.isAuthenticated) {
     toast.info('Please sign in')
     router.push({ name: 'Login' })
     return
   }
-  
   try {
-    await wishlist.toggle(product.value.id)
-    toast.success('Wishlist updated!')
+    // Check if already in wishlist
+    const checkRes = await wishlistService.check({ user_id: auth.user.id, product_id: product.value.id })
+    const isInWishlist = checkRes.data?.data?.exists || checkRes.data?.exists
+    
+    if (isInWishlist) {
+      const allRes = await wishlistService.getAll({ user_id: auth.user.id })
+      const items = allRes.data?.data || []
+      const item = items.find(i => i.product_id === product.value.id)
+      if (item) await wishlistService.remove(item.wishlist_id || item.id)
+      toast.info('Removed from wishlist')
+    } else {
+      await wishlistService.add({ user_id: auth.user.id, product_id: product.value.id })
+      toast.success('Added to wishlist')
+    }
     await wishlist.fetchWishlist()
   } catch (error) {
     toast.error(error.response?.data?.message || 'Failed to update wishlist')
@@ -384,19 +358,14 @@ async function toggleWishlist() {
 }
 
 async function submitReview() {
-  if (!newReview.value.rating) { 
-    toast.error('Please select a rating')
-    return 
-  }
-  if (!newReview.value.comment?.trim()) {
-    toast.error('Please write a comment')
-    return
-  }
+  if (!newReview.value.rating) { toast.error('Please select a rating'); return }
+  if (!newReview.value.comment?.trim()) { toast.error('Please write a comment'); return }
   
   submitReviewLoading.value = true
   try {
     await reviewService.create({
       product_id: product.value.id,
+      user_id: auth.user.id,
       rating: newReview.value.rating,
       comment: newReview.value.comment
     })
@@ -415,9 +384,7 @@ async function fetchReviews() {
   try {
     const res = await reviewService.getByProduct(route.params.id)
     reviews.value = res.data?.data || res.data || []
-    if (!Array.isArray(reviews.value)) {
-      reviews.value = []
-    }
+    if (!Array.isArray(reviews.value)) reviews.value = []
   } catch (error) {
     reviews.value = []
   } finally {
@@ -425,19 +392,14 @@ async function fetchReviews() {
   }
 }
 
+// Fetch similar products by matching the category (Since AI service is not integrated)
 async function fetchSimilarProducts() {
   try {
-    try {
-      const res = await aiService.similar(route.params.id, 10)
-      similarProducts.value = res.data?.data?.products || res.data?.data || []
-    } catch (aiError) {
-      const res = await productService.similar(route.params.id, 10)
-      similarProducts.value = res.data?.data || res.data || []
-    }
-    
-    if (!Array.isArray(similarProducts.value)) {
-      similarProducts.value = []
-    }
+    const res = await productService.getAll({ 
+      category_id: product.value.category_id, 
+      per_page: 10 
+    })
+    similarProducts.value = (res.data?.data || []).filter(p => p.id !== product.value.id)
   } catch (error) {
     similarProducts.value = []
   }
@@ -462,13 +424,10 @@ onMounted(async () => {
       if (images.value.length > 0) {
         selectedImage.value = getImageUrl(images.value[0])
       } else if (product.value.image) {
-        selectedImage.value = getProductImage(product.value)
+        selectedImage.value = getImageUrl(product.value.image)
       }
     } catch (imgError) {
       images.value = []
-      if (product.value.image) {
-        selectedImage.value = getProductImage(product.value)
-      }
     }
     
     await Promise.all([
