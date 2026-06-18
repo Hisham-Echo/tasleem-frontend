@@ -46,8 +46,8 @@
                 <option value="">All Categories</option>
                 <option 
                   v-for="cat in categories" 
-                  :key="cat.id || cat.category_id" 
-                  :value="String(cat.id || cat.category_id)"
+                  :key="cat.category_id || cat.id" 
+                  :value="String(cat.category_id || cat.id)"
                 >
                   {{ cat.name }}
                 </option>
@@ -94,7 +94,7 @@
               <select 
                 v-model="filters.sort" 
                 class="form-select form-select-sm" 
-                @change="fetchProducts(1)"
+                @change="onSortChange"
               >
                 <option value="">Default (Newest)</option>
                 <option value="price_asc">Price: Low to High</option>
@@ -192,7 +192,12 @@
           </div>
 
           <!-- Pagination -->
-          <Pagination :current-page="currentPage" :total-pages="totalPages" @change="fetchProducts" />
+          <Pagination 
+            v-if="totalPages > 1"
+            :current-page="currentPage" 
+            :total-pages="totalPages" 
+            @change="fetchProducts" 
+          />
         </div>
       </div>
     </div>
@@ -200,9 +205,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { productService, categoryService, aiService } from '@/services/api'
+import { productService, categoryService } from '@/services/api'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
@@ -224,13 +229,12 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const viewMode = ref('grid')
 
-// FIX: Initialize category_id as empty string
 const filters = reactive({
   search: route.query.search || '',
   category_id: route.query.category_id ? String(route.query.category_id) : '',
   rentable: route.query.rentable === '1',
   max_price: 50000,
-  sort: ''
+  sort: route.query.sort || ''
 })
 
 let debounceTimer = null
@@ -249,7 +253,8 @@ function formatPrice(val) {
 
 function getProductImage(product) {
   if (product.images && product.images.length > 0) {
-    return product.images[0].url || product.images[0]
+    const img = product.images[0]
+    return img.image_url || img.url || img
   }
   return product.image || null
 }
@@ -266,11 +271,13 @@ function getSortParams(sortValue) {
   return sortMap[sortValue] || { sort_by: 'created_at', sort_order: 'desc' }
 }
 
-// FIX: Explicit handler for category change
 function onCategoryChange(event) {
   const value = event.target.value
-  console.log('Category changed to:', value)
   filters.category_id = value
+  fetchProducts(1)
+}
+
+function onSortChange() {
   fetchProducts(1)
 }
 
@@ -285,7 +292,6 @@ async function fetchProducts(page = 1) {
       page,
       per_page: 9,
       search: filters.search || undefined,
-      // FIX: Only include category_id if it's not empty
       category_id: (filters.category_id && filters.category_id !== '') ? filters.category_id : undefined,
       type: filters.rentable ? 'rental' : undefined,
       max_price: filters.max_price < 50000 ? filters.max_price : undefined,
@@ -300,14 +306,22 @@ async function fetchProducts(page = 1) {
       }
     })
     
-    console.log('Fetching products with params:', params)
-    
     const res = await productService.getAll(params)
     const data = res.data?.data || res.data
     
-    products.value = data.data || data || []
-    total.value = data.total || products.value.length
-    totalPages.value = data.last_page || Math.ceil(total.value / 9) || 1
+    if (data.data) {
+      products.value = data.data
+      total.value = data.total || data.data.length
+      totalPages.value = data.last_page || Math.ceil(total.value / 9) || 1
+    } else if (Array.isArray(data)) {
+      products.value = data
+      total.value = data.length
+      totalPages.value = 1
+    } else {
+      products.value = []
+      total.value = 0
+      totalPages.value = 0
+    }
   } catch (e) {
     console.error('Failed to fetch products:', e)
     products.value = []
@@ -322,7 +336,11 @@ async function addToCart(product) {
     toast.info('Please sign in to add to cart')
     return 
   }
-  const res = await cart.addItem(product.id)
+  const res = await cart.addItem({
+    product_id: product.id,
+    quantity: 1,
+    item_type: 'purchase'
+  })
   if (res.success) { 
     toast.success('Added to cart!')
     cart.openCart() 
@@ -344,12 +362,6 @@ onMounted(async () => {
   try {
     const catRes = await categoryService.getAll()
     categories.value = catRes.data?.data || catRes.data || []
-    
-    // DEBUG: Log categories to see their structure
-    console.log('Categories loaded:', categories.value)
-    if (categories.value.length > 0) {
-      console.log('First category structure:', categories.value[0])
-    }
   } catch (e) {
     console.error('Failed to load categories:', e)
     toast.error('Failed to load categories')

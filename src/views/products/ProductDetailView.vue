@@ -26,52 +26,42 @@
                 <i class="bi bi-image text-muted" style="font-size:4rem;"></i>
               </div>
             </div>
-            <!-- Thumbnails -->
-            <div class="d-flex gap-2 flex-wrap" v-if="images.length > 1">
-              <div v-for="img in images" :key="img.id || img"
+            <div class="d-flex gap-2 flex-wrap" v-if="images && images.length > 1">
+              <div v-for="img in images" :key="img.image_id || img.id"
                 class="rounded-xl overflow-hidden cursor-pointer"
                 style="width:72px; height:72px; flex-shrink:0; border:2px solid transparent; transition:.15s;"
-                :style="{ borderColor: selectedImage === (img.url || img) ? 'var(--gold)' : 'transparent' }"
-                @click="selectedImage = img.url || img">
-                <img :src="img.url || img" style="width:100%; height:100%; object-fit:cover;" />
+                :style="{ borderColor: selectedImage === getImageUrl(img) ? 'var(--gold)' : 'transparent' }"
+                @click="selectedImage = getImageUrl(img)">
+                <img :src="getImageUrl(img)" style="width:100%; height:100%; object-fit:cover;" />
               </div>
             </div>
           </div>
 
           <!-- Info -->
           <div class="col-lg-6">
-            <!-- Category & badges -->
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
               <span class="badge badge-gold" v-if="product.category">{{ product.category?.name }}</span>
-              <!-- FIX: Use quantity instead of stock -->
               <span class="badge" style="background:rgba(46,204,113,.15); color:#2ecc71; border:1px solid rgba(46,204,113,.25);" v-if="product.quantity > 0">In Stock ({{ product.quantity }})</span>
               <span class="badge" style="background:rgba(231,76,60,.15); color:#e74c3c; border:1px solid rgba(231,76,60,.25);" v-else>Out of Stock</span>
-              <!-- FIX: Check type field instead of is_rentable -->
               <span class="badge badge-gold" v-if="isRentable"><i class="bi bi-clock me-1"></i>Rentable</span>
             </div>
 
             <h1 class="text-cream mb-3" style="font-size:1.8rem;">{{ product.name }}</h1>
 
-            <!-- Rating -->
-            <!-- FIX: Use rate instead of rating -->
             <div class="d-flex align-items-center gap-3 mb-3" v-if="product.rate !== undefined">
-              <StarRating :rating="product.rate" :count="product.reviews_count || reviews.length" />
+              <StarRating :rating="product.rate" :count="product.reviews_count || (reviews ? reviews.length : 0)" />
             </div>
 
-            <!-- Price -->
             <div class="mb-4">
               <span class="text-gold" style="font-size:2rem; font-weight:800;">{{ formatPrice(product.price) }}</span>
               <span class="text-muted ms-2 text-decoration-line-through" v-if="product.old_price">{{ formatPrice(product.old_price) }}</span>
-              <!-- FIX: Show rental price if rentable -->
               <div class="text-muted mt-1" style="font-size:.85rem;" v-if="isRentable && product.daily_rental_price">
                 <i class="bi bi-clock me-1"></i>{{ formatPrice(product.daily_rental_price) }} / day for rental
               </div>
             </div>
 
-            <!-- Description -->
             <p class="text-muted mb-4" style="line-height:1.7;">{{ product.description }}</p>
 
-            <!-- Buy: quantity + add to cart -->
             <div class="mb-3">
               <label class="form-label">Quantity</label>
               <div class="d-flex align-items-center gap-3 mb-3">
@@ -98,8 +88,6 @@
               </div>
             </div>
 
-            <!-- Rental section -->
-            <!-- FIX: Use isRentable computed property -->
             <div v-if="isRentable" class="card p-3 mt-3" style="border-radius:1rem; border-color:rgba(201,169,110,.25)!important;">
               <h6 class="text-gold mb-3"><i class="bi bi-clock-history me-2"></i>Rent This Item</h6>
               <div class="row g-2 mb-3">
@@ -133,11 +121,11 @@
               <div v-if="reviewsLoading">
                 <div class="skeleton mb-3" style="height:80px;" v-for="n in 3" :key="n"></div>
               </div>
-              <div v-else-if="reviews.length === 0" class="text-muted py-4">
+              <div v-else-if="!reviews || reviews.length === 0" class="text-muted py-4">
                 <i class="bi bi-chat-left-dots fs-3 d-block mb-2"></i>No reviews yet. Be the first!
               </div>
               <div class="d-flex flex-column gap-3" v-else>
-                <div class="card p-3" v-for="review in reviews" :key="review.id">
+                <div class="card p-3" v-for="review in reviews" :key="review.review_id || review.id">
                   <div class="d-flex align-items-center gap-2 mb-2">
                     <div style="width:36px; height:36px; border-radius:50%; background:var(--gold); display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--navy); font-size:.85rem; flex-shrink:0;">
                       {{ (review.user?.name || 'U')[0].toUpperCase() }}
@@ -152,7 +140,6 @@
                 </div>
               </div>
 
-              <!-- Write a review (auth required) -->
               <div class="card p-4 mt-4" v-if="auth.isAuthenticated">
                 <h6 class="text-cream mb-3">Write a Review</h6>
                 <div class="mb-3">
@@ -179,30 +166,59 @@
           </div>
         </div>
       </div>
+
+      <!-- Similar Products Carousel -->
+      <section class="py-5" v-if="similarProducts && similarProducts.length > 0" style="background:var(--navy);">
+        <div class="container">
+          <div class="d-flex align-items-center justify-content-between mb-4">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-grid-3x3-gap text-gold fs-4"></i>
+              <h3 class="text-cream mb-0">Related Products</h3>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-gold btn-sm" @click="scrollCarousel(-1)" :disabled="carouselIndex === 0">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <button class="btn btn-outline-gold btn-sm" @click="scrollCarousel(1)" :disabled="carouselIndex >= maxCarouselIndex">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="position-relative overflow-hidden">
+            <div class="d-flex gap-4 transition-transform" :style="{ transform: `translateX(-${carouselIndex * (100/visibleItems)}%)` }">
+              <div 
+                v-for="product in similarProducts" 
+                :key="product.id"
+                class="flex-shrink-0"
+                :style="{ width: `${100/visibleItems}%` }"
+              >
+                <ProductCard :product="product" />
+              </div>
+            </div>
+          </div>
+          
+          <!-- Carousel indicators -->
+          <div class="d-flex justify-content-center gap-2 mt-3">
+            <button 
+              v-for="i in carouselDots" 
+              :key="i"
+              class="btn btn-sm rounded-circle"
+              :class="i === carouselIndex ? 'btn-gold' : 'btn-outline-gold'"
+              @click="carouselIndex = i"
+              style="width:10px; height:10px; padding:0;"
+            ></button>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Not found -->
     <div v-else class="text-center py-5">
       <i class="bi bi-box-seam text-muted" style="font-size:3rem;"></i>
       <h5 class="text-muted mt-3">Product not found</h5>
       <RouterLink class="btn btn-outline-gold mt-2" to="/products">Back to Products</RouterLink>
     </div>
-  
-    <!-- Similar Products -->
-    <section class="py-5" v-if="similarProducts.length > 0" style="background:var(--navy);">
-      <div class="container">
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <i class="bi bi-grid-3x3-gap text-gold fs-4"></i>
-          <h3 class="text-cream mb-0">Similar Products</h3>
-        </div>
-        <div class="row g-4">
-          <div class="col-6 col-md-4 col-xl-2" v-for="p in similarProducts" :key="p.id">
-            <ProductCard :product="p" />
-          </div>
-        </div>
-      </div>
-    </section>
-</div>
+  </div>
 </template>
 
 <script setup>
@@ -240,7 +256,10 @@ const rental = ref({ start_date: '', end_date: '' })
 const newReview = ref({ rating: 0, comment: '' })
 const today = new Date().toISOString().split('T')[0]
 
-// FIX: Computed property to check if product is rentable based on type field
+// Carousel state
+const carouselIndex = ref(0)
+const visibleItems = 5
+
 const isRentable = computed(() => {
   return product.value?.type === 'rental' || product.value?.type === 'both'
 })
@@ -250,13 +269,46 @@ const rentalDays = computed(() => {
   const ms = new Date(rental.value.end_date) - new Date(rental.value.start_date)
   return Math.max(Math.ceil(ms / 86400000), 0)
 })
+
 const rentalTotal = computed(() => rentalDays.value * (product.value?.daily_rental_price || 0))
+
+const maxCarouselIndex = computed(() => {
+  return Math.max(0, similarProducts.value.length - visibleItems)
+})
+
+const carouselDots = computed(() => {
+  return Math.ceil(similarProducts.value.length / visibleItems)
+})
 
 function formatPrice(val) {
   return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP' }).format(val || 0)
 }
+
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+}
+
+function getImageUrl(img) {
+  if (!img) return null
+  const url = img.image_url || img.url || img
+  if (url && !url.startsWith('http')) {
+    return `https://tasleembackendapifinal-production.up.railway.app/${url}`
+  }
+  return url
+}
+
+function getProductImage(product) {
+  if (product.images && product.images.length > 0) {
+    return getImageUrl(product.images[0])
+  }
+  return product.image || null
+}
+
+function scrollCarousel(direction) {
+  const newIndex = carouselIndex.value + direction
+  if (newIndex >= 0 && newIndex <= maxCarouselIndex.value) {
+    carouselIndex.value = newIndex
+  }
 }
 
 async function addToCart() {
@@ -265,13 +317,26 @@ async function addToCart() {
     router.push({ name: 'Login' })
     return 
   }
-  cartLoading.value = true
-  for (let i = 0; i < quantity.value; i++) {
-    await cart.addItem(product.value.id)
+  
+  if (!product.value || product.value.quantity === 0) {
+    toast.error('Product is out of stock')
+    return
   }
-  cartLoading.value = false
-  toast.success('Added to cart!')
-  cart.openCart()
+  
+  cartLoading.value = true
+  try {
+    await cart.addItem({
+      product_id: product.value.id,
+      quantity: quantity.value,
+      item_type: 'purchase'
+    })
+    toast.success('Added to cart!')
+    cart.openCart()
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Failed to add to cart')
+  } finally {
+    cartLoading.value = false
+  }
 }
 
 async function addRental() {
@@ -285,25 +350,37 @@ async function addRental() {
     return 
   }
   rentalLoading.value = true
-  const res = await cart.addRental(product.value.id, rental.value.start_date, rental.value.end_date)
-  rentalLoading.value = false
-  if (res.success) { 
+  try {
+    await cart.addRental({
+      product_id: product.value.id,
+      quantity: 1,
+      rental_start_date: rental.value.start_date,
+      rental_end_date: rental.value.end_date,
+      item_type: 'rental'
+    })
     toast.success('Rental added to cart!')
-    cart.openCart() 
-  } else {
-    toast.error(res.message)
+    cart.openCart()
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Failed to add rental')
+  } finally {
+    rentalLoading.value = false
   }
 }
 
 async function toggleWishlist() {
-  const res = await wishlist.toggle(product.value.id)
-  if (res?.needsAuth) { 
+  if (!auth.isAuthenticated) {
     toast.info('Please sign in')
     router.push({ name: 'Login' })
-    return 
+    return
   }
-  if (res?.added) toast.success('Added to wishlist')
-  else if (res?.added === false) toast.info('Removed from wishlist')
+  
+  try {
+    await wishlist.toggle(product.value.id)
+    toast.success('Wishlist updated!')
+    await wishlist.fetchWishlist()
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Failed to update wishlist')
+  }
 }
 
 async function submitReview() {
@@ -311,14 +388,23 @@ async function submitReview() {
     toast.error('Please select a rating')
     return 
   }
+  if (!newReview.value.comment?.trim()) {
+    toast.error('Please write a comment')
+    return
+  }
+  
   submitReviewLoading.value = true
   try {
-    await reviewService.create({ product_id: product.value.id, ...newReview.value })
+    await reviewService.create({
+      product_id: product.value.id,
+      rating: newReview.value.rating,
+      comment: newReview.value.comment
+    })
     toast.success('Review submitted!')
     newReview.value = { rating: 0, comment: '' }
     await fetchReviews()
-  } catch (e) {
-    toast.error(e.response?.data?.message || 'Failed to submit review')
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Failed to submit review')
   } finally {
     submitReviewLoading.value = false
   }
@@ -327,9 +413,12 @@ async function submitReview() {
 async function fetchReviews() {
   reviewsLoading.value = true
   try {
-    const res = await reviewService.getAll({ product_id: route.params.id })
+    const res = await reviewService.getByProduct(route.params.id)
     reviews.value = res.data?.data || res.data || []
-  } catch (_) {
+    if (!Array.isArray(reviews.value)) {
+      reviews.value = []
+    }
+  } catch (error) {
     reviews.value = []
   } finally {
     reviewsLoading.value = false
@@ -338,31 +427,66 @@ async function fetchReviews() {
 
 async function fetchSimilarProducts() {
   try {
-    const res = await productService.similar(product.value.id)
-    similarProducts.value = res.data?.data || res.data || []
-  } catch (_) {
+    try {
+      const res = await aiService.similar(route.params.id, 10)
+      similarProducts.value = res.data?.data?.products || res.data?.data || []
+    } catch (aiError) {
+      const res = await productService.similar(route.params.id, 10)
+      similarProducts.value = res.data?.data || res.data || []
+    }
+    
+    if (!Array.isArray(similarProducts.value)) {
+      similarProducts.value = []
+    }
+  } catch (error) {
     similarProducts.value = []
   }
 }
 
 onMounted(async () => {
   try {
-    const [prodRes, imgRes] = await Promise.all([
-      productService.getById(route.params.id),
-      imageService.getAll(route.params.id).catch(() => ({ data: [] }))
-    ])
-    product.value = prodRes.data?.data || prodRes.data
-    images.value = imgRes.data?.data || imgRes.data || []
-    selectedImage.value = images.value[0]?.url || product.value?.image || null
+    const prodRes = await productService.getById(route.params.id)
+    product.value = prodRes.data?.data || prodRes.data || null
+    
+    if (!product.value) {
+      toast.error('Product not found')
+      router.push('/products')
+      return
+    }
+    
+    try {
+      const imgRes = await imageService.getAll(route.params.id)
+      const imgData = imgRes.data?.data || imgRes.data || []
+      images.value = Array.isArray(imgData) ? imgData : []
+      
+      if (images.value.length > 0) {
+        selectedImage.value = getImageUrl(images.value[0])
+      } else if (product.value.image) {
+        selectedImage.value = getProductImage(product.value)
+      }
+    } catch (imgError) {
+      images.value = []
+      if (product.value.image) {
+        selectedImage.value = getProductImage(product.value)
+      }
+    }
     
     await Promise.all([
       fetchReviews(),
       fetchSimilarProducts()
     ])
-  } catch (_) {
+  } catch (error) {
+    console.error('Failed to load product:', error)
+    toast.error('Failed to load product details')
     product.value = null
   } finally {
     loading.value = false
   }
 })
 </script>
+
+<style scoped>
+.transition-transform {
+  transition: transform 0.5s ease-in-out;
+}
+</style>
