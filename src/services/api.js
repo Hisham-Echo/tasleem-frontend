@@ -159,7 +159,7 @@ export const logService = {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Notifications (Fixes the current build error!)
+// Notifications
 // ─────────────────────────────────────────────────────────────
 export const notificationService = {
   getAll: (params) => api.get('/notifications', { params }),
@@ -168,6 +168,31 @@ export const notificationService = {
   markAllAsRead: () => api.post('/notifications/read-all'),
   getUnreadCount: () => api.get('/notifications/unread-count'),
   delete: (id) => api.delete(`/notifications/${id}`),
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI Service (Mapped to standard endpoints to prevent 404s)
+// Fixes the AppNavbar.vue build error!
+// ─────────────────────────────────────────────────────────────
+export const aiService = {
+  // Search maps to standard product search
+  search: (query, limit = 20) => api.get('/products', { params: { search: query, per_page: limit } }),
+  
+  // Trending maps to most viewed products
+  trending: (limit = 10) => api.get('/products', { params: { sort_by: 'view_count', sort_order: 'desc', per_page: limit } }),
+  
+  // Explore maps to newest products
+  explore: (limit = 10) => api.get('/products', { params: { sort_by: 'created_at', sort_order: 'desc', per_page: limit } }),
+  
+  // Similar maps to products (backend will handle logic or fallback)
+  similar: (productId, limit = 10) => api.get('/products', { params: { similar_to: productId, per_page: limit } }),
+  
+  // Recommendations maps to the recommendations table
+  forUser: (userId, limit = 10) => api.get('/recommendations', { params: { user_id: userId, per_page: limit } }),
+  
+  // Sentiment & Bundle (Not available in backend, return empty to prevent crashes)
+  sentiment: () => Promise.resolve({ data: { data: null } }),
+  bundle: () => Promise.resolve({ data: { data: { products: [] } } }),
 }
 
 // ─────────────────────────────────────────────────────────────
