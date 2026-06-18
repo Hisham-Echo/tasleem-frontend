@@ -198,7 +198,6 @@
             </div>
           </div>
           
-          <!-- Carousel indicators -->
           <div class="d-flex justify-content-center gap-2 mt-3">
             <button 
               v-for="i in carouselDots" 
@@ -290,10 +289,19 @@ function formatDate(d) {
 
 function getImageUrl(img) {
   if (!img) return null
-  const url = img.image_url || img.url || img
-  if (url && !url.startsWith('http')) {
-    return `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
+  let url = img.image_url || img.url || img
+  if (!url) return null
+  
+  // Force HTTPS to fix Mixed Content errors
+  if (url.startsWith('http://')) {
+    url = url.replace('http://', 'https://')
   }
+  
+  // If it's a relative path, prepend the backend URL
+  if (!url.startsWith('http')) {
+    url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
+  }
+  
   return url
 }
 
@@ -330,28 +338,53 @@ async function addToCart() {
   }
 }
 
+async function addRental() {
+  if (!auth.isAuthenticated) { 
+    toast.info('Please sign in')
+    router.push({ name: 'Login' })
+    return 
+  }
+  if (!rental.value.start_date || !rental.value.end_date) { 
+    toast.error('Please select rental dates')
+    return 
+  }
+  rentalLoading.value = true
+  try {
+    await cart.addRental({
+      product_id: product.value.id,
+      quantity: 1,
+      rental_start_date: rental.value.start_date,
+      rental_end_date: rental.value.end_date,
+      item_type: 'rental'
+    })
+    toast.success('Rental added to cart!')
+    cart.openCart()
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Failed to add rental')
+  } finally {
+    rentalLoading.value = false
+  }
+}
+
 async function toggleWishlist() {
   if (!auth.isAuthenticated) {
     toast.info('Please sign in')
     router.push({ name: 'Login' })
     return
   }
+  
   try {
-    // Check if already in wishlist
-    const checkRes = await wishlistService.check({ user_id: auth.user.id, product_id: product.value.id })
-    const isInWishlist = checkRes.data?.data?.exists || checkRes.data?.exists
-    
-    if (isInWishlist) {
-      const allRes = await wishlistService.getAll({ user_id: auth.user.id })
-      const items = allRes.data?.data || []
-      const item = items.find(i => i.product_id === product.value.id)
-      if (item) await wishlistService.remove(item.wishlist_id || item.id)
-      toast.info('Removed from wishlist')
-    } else {
-      await wishlistService.add({ user_id: auth.user.id, product_id: product.value.id })
-      toast.success('Added to wishlist')
+    const res = await wishlist.toggle(product.value.id)
+    if (res.needsAuth) {
+      toast.info('Please sign in')
+      router.push({ name: 'Login' })
+      return
     }
-    await wishlist.fetchWishlist()
+    if (res.added) {
+      toast.success('Added to wishlist')
+    } else {
+      toast.info('Removed from wishlist')
+    }
   } catch (error) {
     toast.error(error.response?.data?.message || 'Failed to update wishlist')
   }
@@ -392,7 +425,6 @@ async function fetchReviews() {
   }
 }
 
-// Fetch similar products by matching the category (Since AI service is not integrated)
 async function fetchSimilarProducts() {
   try {
     const res = await productService.getAll({ 
@@ -428,6 +460,9 @@ onMounted(async () => {
       }
     } catch (imgError) {
       images.value = []
+      if (product.value.image) {
+        selectedImage.value = getImageUrl(product.value.image)
+      }
     }
     
     await Promise.all([

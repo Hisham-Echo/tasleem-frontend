@@ -254,9 +254,22 @@ function formatPrice(val) {
 function getProductImage(product) {
   if (product.images && product.images.length > 0) {
     const img = product.images[0]
-    return img.image_url || img.url || img
+    let url = img.image_url || img.url || img
+    if (!url) return null
+    
+    // Force HTTPS
+    if (url.startsWith('http://')) url = url.replace('http://', 'https://')
+    if (!url.startsWith('http')) url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
+    
+    return url
   }
-  return product.image || null
+  
+  let url = product.image || null
+  if (!url) return null
+  if (url.startsWith('http://')) url = url.replace('http://', 'https://')
+  if (!url.startsWith('http')) url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
+  
+  return url
 }
 
 function getSortParams(sortValue) {
@@ -299,7 +312,6 @@ async function fetchProducts(page = 1) {
       sort_order: sortParams.sort_order
     }
     
-    // Remove undefined values
     Object.keys(params).forEach(key => {
       if (params[key] === undefined || params[key] === null || params[key] === '') {
         delete params[key]

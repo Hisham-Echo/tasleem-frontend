@@ -1,79 +1,67 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
 import { wishlistService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
-export const useWishlistStore = defineStore('wishlist', () => {
-  const items   = ref([])
-  const loading = ref(false)
-
-  // Map of product_id → wishlist item id (for removal)
-  const itemMap = computed(() => {
-    const m = {}
-    items.value.forEach(i => { m[i.product_id || i.product?.id] = i.id })
-    return m
-  })
-
-  const ids   = computed(() => Object.keys(itemMap.value).map(Number))
-  const count = computed(() => items.value.length)
-
-  function isInWishlist(productId) {
-    return ids.value.includes(Number(productId))
-  }
-
-  async function fetchWishlist() {
-    const auth = useAuthStore()
-    if (!auth.isAuthenticated) { items.value = []; return }
-    try {
-      const res = await wishlistService.getAll()
-      items.value = res.data?.data || res.data || []
-    } catch (_) {
-      items.value = []
+export const useWishlistStore = defineStore('wishlist', {
+  state: () => ({
+    items: [],
+    loading: false
+  }),
+  
+  getters: {
+    isInWishlist: (state) => (productId) => {
+      return state.items.some(item => item.product_id === productId)
     }
-  }
-
-  async function toggle(productId) {
-    const auth = useAuthStore()
-    if (!auth.isAuthenticated) return { needsAuth: true }
-    loading.value = true
-    try {
-      if (isInWishlist(productId)) {
-        // Remove using the wishlist item id (not product id)
-        const wishlistItemId = itemMap.value[productId]
-        await wishlistService.remove(wishlistItemId)
-        items.value = items.value.filter(i => i.id !== wishlistItemId)
-        return { added: false }
-      } else {
-        await wishlistService.add({ product_id: productId })
-        await fetchWishlist()
-        return { added: true }
+  },
+  
+  actions: {
+    async fetchWishlist() {
+      const auth = useAuthStore()
+      if (!auth.user?.id) return
+      try {
+        const res = await wishlistService.getAll({ user_id: auth.user.id })
+        this.items = res.data?.data || []
+      } catch (error) {
+        console.error('Fetch wishlist error:', error)
+        this.items = []
       }
-    } catch (err) {
-      return { error: err.response?.data?.message }
-    } finally {
-      loading.value = false
+    },
+    
+    async toggle(productId) {
+      const auth = useAuthStore()
+      if (!auth.user?.id) return { needsAuth: true }
+      
+      try {
+        const checkRes = await wishlistService.check({ 
+          user_id: auth.user.id, 
+          product_id: productId 
+        })
+        const exists = checkRes.data?.data?.exists || checkRes.data?.exists
+        
+        if (exists) {
+          const allRes = await wishlistService.getAll({ user_id: auth.user.id })
+          const items = allRes.data?.data || []
+          const item = items.find(i => i.product_id === productId)
+          if (item) {
+            await wishlistService.remove(item.wishlist_id || item.id)
+          }
+          await this.fetchWishlist()
+          return { success: true, added: false }
+        } else {
+          await wishlistService.add({ 
+            user_id: auth.user.id, 
+            product_id: productId 
+          })
+          await this.fetchWishlist()
+          return { success: true, added: true }
+        }
+      } catch (error) {
+        if (error.response?.status === 401 || error.response?.status === 403) return { needsAuth: true }
+        return { 
+          success: false, 
+          message: error.response?.data?.message || 'Failed to update wishlist'
+        }
+      }
     }
   }
-
-  async function remove(productId) {
-    const wishlistItemId = itemMap.value[productId]
-    if (!wishlistItemId) return
-    try {
-      await wishlistService.remove(wishlistItemId)
-      items.value = items.value.filter(i => i.id !== wishlistItemId)
-    } catch (_) {}
-  }
-
-  async function clearAll() {
-    const auth = useAuthStore()
-    try {
-      // ✅ Fixed: backend needs DELETE /wishlist/clear/{userId}
-      await wishlistService.clear(auth.user?.id)
-      items.value = []
-    } catch (_) {
-      items.value = []
-    }
-  }
-
-  return { items, loading, ids, count, isInWishlist, fetchWishlist, toggle, remove, clearAll }
 })
