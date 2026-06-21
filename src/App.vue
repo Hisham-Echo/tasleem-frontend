@@ -4,20 +4,20 @@
     <div v-if="auth.isAuthenticated && auth.needsVerification && !isAuthPage && !isVerifyPage"
       class="verify-banner d-flex align-items-center justify-content-center gap-2 px-3 py-2 flex-wrap">
       <i class="bi bi-envelope-exclamation-fill"></i>
-      <span style="font-size:.85rem;">Please verify your email address to access all features.</span>
-      <RouterLink to="/verify-email" class="btn btn-sm py-0 px-2" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:.8rem;">Verify Now</RouterLink>
+      <span style="font-size: .85rem;">Please verify your email address to access all features.</span>
+      <RouterLink to="/verify-email" class="btn btn-sm py-0 px-2" style="background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.3); font-size: .8rem;">Verify Now</RouterLink>
     </div>
-
+    
     <AppNavbar v-if="!isAuthPage" />
-
-    <main class="flex-grow-1" :style="{ paddingBottom: auth.isAuthenticated && !isAuthPage ? '70px' : '0' }" style="min-height:60vh;">
+    
+    <main class="flex-grow-1" :style="{ paddingBottom: auth.isAuthenticated && !isAuthPage ? '70px' : '0' }" style="min-height: 60vh;">
       <RouterView v-slot="{ Component }">
         <Transition name="fade" mode="out-in">
           <component :is="Component" />
         </Transition>
       </RouterView>
     </main>
-
+    
     <AppFooter v-if="!isAuthPage && !isMobileApp" />
     <MobileBottomNav v-if="!isAuthPage" />
     <CartSidebar />
@@ -25,7 +25,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -46,19 +46,35 @@ const notifications = useNotificationStore()
 const authPages = ['Login', 'Register', 'ForgotPassword', 'ResetPassword']
 const isAuthPage = computed(() => authPages.includes(route.name))
 const isVerifyPage = computed(() => route.name === 'VerifyEmail')
-const isMobileApp = computed(() => window.innerWidth < 768 && route.name !== 'Home')
 
-onMounted(async () => {
-  if (auth.isAuthenticated) {
-    await auth.fetchMe()
-    await Promise.all([cart.fetchCart(), wishlist.fetchWishlist()])
-    // notifications disabled — no backend endpoint yet
-  }
+// FIX 1: Reactive window width to properly track mobile state on resize
+const windowWidth = ref(window.innerWidth)
+const handleResize = () => {
+  windowWidth.value = window.innerWidth
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
   notifications.stopPolling()
 })
+
+const isMobileApp = computed(() => windowWidth.value < 768 && route.name !== 'Home')
+
+// FIX 2: Watch authentication state to fetch user data and cart/wishlist
+// This handles both initial load (if already logged in) and logging in after app mount
+watch(() => auth.isAuthenticated, async (isAuth, oldAuth) => {
+  if (isAuth && !oldAuth) {
+    await auth.fetchMe()
+    await Promise.all([cart.fetchCart(), wishlist.fetchWishlist()])
+  } else if (!isAuth) {
+    cart.items = []
+    wishlist.items = []
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

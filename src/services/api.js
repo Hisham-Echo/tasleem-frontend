@@ -1,4 +1,5 @@
 import axios from 'axios'
+import router from '@/router' // FIX: Import router for SPA navigation
 
 const api = axios.create({
   baseURL: 'https://tasleembackendapifinal-production.up.railway.app/api/v1',
@@ -27,7 +28,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('tasleem_token')
       localStorage.removeItem('tasleem_user')
-      window.location.href = '/login'
+      
+      // FIX: Use router for SPA navigation instead of full page reload
+      if (router.currentRoute.value.name !== 'Login') {
+        router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
+      }
     }
     return Promise.reject(error)
   }
@@ -41,6 +46,9 @@ export const authService = {
   register: (data) => api.post('/register', data),
   logout: () => api.post('/logout'),
   me: () => api.get('/me'),
+  forgotPassword: (data) => api.post('/forgot-password', data),
+  resetPassword: (data) => api.post('/reset-password', data),
+  resendVerification: () => api.post('/resend-verification'),
 }
 
 // ─────────────────────────────────────────────────────────────

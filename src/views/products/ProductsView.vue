@@ -169,7 +169,7 @@
                   <div>
                     <span class="badge badge-gold mb-1" v-if="product.category">{{ product.category?.name }}</span>
                     <h6 class="text-cream mb-1">{{ product.name }}</h6>
-                    <p class="text-muted mb-0" style="font-size:.82rem; display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+                    <p class="text-muted mb-0" style="font-size:.82rem; display:-webkit-box; line-clamp:2; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
                       {{ product.description?.slice(0, 80) }}...
                     </p>
                   </div>

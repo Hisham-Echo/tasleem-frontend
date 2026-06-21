@@ -4,12 +4,12 @@ import { notificationService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 export const useNotificationStore = defineStore('notifications', () => {
-  const items       = ref([])
-  const loading     = ref(false)
-  let   pollTimer   = null
+  const items = ref([])
+  const loading = ref(false)
+  let pollTimer = null
 
   const unreadCount = computed(() => items.value.filter(n => !n.read_at).length)
-  const hasUnread   = computed(() => unreadCount.value > 0)
+  const hasUnread = computed(() => unreadCount.value > 0)
 
   async function fetchAll() {
     const auth = useAuthStore()
@@ -28,7 +28,8 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   async function markRead(id) {
     try {
-      await notificationService.markRead(id)
+      // FIX: Changed from markRead to markAsRead
+      await notificationService.markAsRead(id)
       const n = items.value.find(n => n.id === id)
       if (n) n.read_at = new Date().toISOString()
     } catch (_) {}
@@ -36,7 +37,8 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   async function markAllRead() {
     try {
-      await notificationService.markAllRead()
+      // FIX: Changed from markAllRead to markAllAsRead
+      await notificationService.markAllAsRead()
       items.value.forEach(n => { if (!n.read_at) n.read_at = new Date().toISOString() })
     } catch (_) {}
   }
