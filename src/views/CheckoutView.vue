@@ -282,7 +282,8 @@ async function placeOrder() {
   loading.value = true
   try {
     const orderPayload = {
-      items: cart.items.map(i => ({ product_id: i.product_id || i.id, quantity: i.quantity || 1 })),
+      // FIX: i.id is the cart item ID, not the product ID. Use i.product?.id as fallback.
+      items: cart.items.map(i => ({ product_id: i.product_id || i.product?.id, quantity: i.quantity || 1 })),
       shipping_address: `${shipping.address}, ${shipping.city}`,
       payment_method: payment.method
     }

@@ -175,13 +175,15 @@
               <i class="bi bi-grid-3x3-gap text-gold fs-4"></i>
               <h3 class="text-cream mb-0">Related Products</h3>
             </div>
-            <div class="d-flex gap-2">
-              <button class="btn btn-outline-gold btn-sm" @click="scrollCarousel(-1)" :disabled="carouselIndex === 0">
-                <i class="bi bi-chevron-left"></i>
-              </button>
-              <button class="btn btn-outline-gold btn-sm" @click="scrollCarousel(1)" :disabled="carouselIndex >= maxCarouselIndex">
-                <i class="bi bi-chevron-right"></i>
-              </button>
+            <div class="d-flex justify-content-center gap-2 mt-3">
+              <button 
+              v-for="i in carouselDots" 
+              :key="i"
+              class="btn btn-sm rounded-circle"
+              :class="(i - 1) === carouselIndex ? 'btn-gold' : 'btn-outline-gold'"
+              @click="carouselIndex = i - 1"
+              style="width:10px; height:10px; padding:0;"
+            ></button>
             </div>
           </div>
           

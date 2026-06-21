@@ -196,7 +196,8 @@ function statusBadge(s) {
 async function cancelOrder() {
   cancelling.value = true
   try {
-    await orderService.cancel(order.value.id)
+    // FIX: orderService.cancel does not exist. Use update() to change the status.
+    await orderService.update(order.value.id, { status: 'cancelled' })
     order.value.status = 'cancelled'
     showCancelConfirm.value = false
     toast.success('Order cancelled successfully')

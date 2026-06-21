@@ -1,11 +1,13 @@
 <template>
   <!-- Backdrop -->
   <Transition name="fade">
-    <div v-if="cart.open" class="offcanvas-backdrop show" @click="cart.closeCart()"></div>
+    <!-- FIX: Changed cart.open to cart.isOpen -->
+    <div v-if="cart.isOpen" class="offcanvas-backdrop show" @click="cart.closeCart()"></div>
   </Transition>
 
   <!-- Offcanvas -->
-  <div class="offcanvas offcanvas-end cart-offcanvas" :class="{ show: cart.open }" tabindex="-1">
+  <!-- FIX: Changed cart.open to cart.isOpen -->
+  <div class="offcanvas offcanvas-end cart-offcanvas" :class="{ show: cart.isOpen }" tabindex="-1">
     <div class="offcanvas-header">
       <h5 class="offcanvas-title text-cream d-flex align-items-center gap-2">
         <i class="bi bi-bag text-gold"></i> My Cart
@@ -69,7 +71,6 @@
             </div>
 
             <div class="d-flex flex-column align-items-end gap-2">
-              <!-- FIX: price × quantity -->
               <span class="cart-item-price">{{ formatPrice((item.price || 0) * (item.quantity || 1)) }}</span>
               <button class="btn btn-sm p-0 text-muted" @click="cart.removeItem(item.id)" style="line-height:1;">
                 <i class="bi bi-x-circle"></i>

@@ -323,14 +323,25 @@ const initials = computed(() =>
 )
 
 const profileForm = reactive({
-  name: auth.user?.name || '',
-  email: auth.user?.email || '',
-  phone: auth.user?.phone || '',
-  city: auth.user?.city || '',
-  address: auth.user?.address || '',
+  name: '',
+  email: '',
+  phone: '',
+  city: '',
+  address: '',
   password: '',
   password_confirmation: ''
 })
+
+// FIX: Watch auth.user and populate the form once the data arrives from the backend
+watch(() => auth.user, (newUser) => {
+  if (newUser) {
+    profileForm.name = newUser.name || ''
+    profileForm.email = newUser.email || ''
+    profileForm.phone = newUser.phone || ''
+    profileForm.city = newUser.city || ''
+    profileForm.address = newUser.address || ''
+  }
+}, { immediate: true })
 
 function formatPrice(v) { return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP' }).format(v || 0) }
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-EG', { year:'numeric', month:'short', day:'numeric' }) : '' }
