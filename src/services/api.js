@@ -1,5 +1,5 @@
 import axios from 'axios'
-import router from '@/router' // FIX: Import router for SPA navigation
+import router from '@/router'
 
 const api = axios.create({
   baseURL: 'https://tasleembackendapifinal-production.up.railway.app/api/v1',
@@ -21,6 +21,9 @@ api.interceptors.request.use(
   error => Promise.reject(error)
 )
 
+// FIX 1: Prevent multiple 401 redirects
+let isRedirectingToLogin = false
+
 // Response interceptor
 api.interceptors.response.use(
   response => response,
@@ -29,9 +32,10 @@ api.interceptors.response.use(
       localStorage.removeItem('tasleem_token')
       localStorage.removeItem('tasleem_user')
       
-      // FIX: Use router for SPA navigation instead of full page reload
-      if (router.currentRoute.value.name !== 'Login') {
+      if (!isRedirectingToLogin && router.currentRoute.value.name !== 'Login') {
+        isRedirectingToLogin = true
         router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
+          .finally(() => { isRedirectingToLogin = false })
       }
     }
     return Promise.reject(error)
@@ -146,7 +150,7 @@ export const cartService = {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Recommendations (Database-driven AI)
+// Recommendations
 // ─────────────────────────────────────────────────────────────
 export const recommendationService = {
   getAll: (params) => api.get('/recommendations', { params }),
@@ -179,7 +183,7 @@ export const notificationService = {
 }
 
 // ─────────────────────────────────────────────────────────────
-// AI Service (Mapped to standard endpoints)
+// AI Service
 // ─────────────────────────────────────────────────────────────
 export const aiService = {
   search: (query, limit = 20) => api.get('/products', { params: { search: query, per_page: limit } }),
@@ -189,6 +193,20 @@ export const aiService = {
   forUser: (userId, limit = 10) => api.get('/recommendations', { params: { user_id: userId, per_page: limit } }),
   sentiment: () => Promise.resolve({ data: { data: null } }),
   bundle: () => Promise.resolve({ data: { data: { products: [] } } }),
+  // FIX 2: Added missing assistant method (falls back to search if no dedicated AI endpoint exists)
+  assistant: async (query) => {
+    try {
+      const res = await api.get('/products', { params: { search: query, per_page: 4 } })
+      return {
+        data: {
+          answer: `Here are some products matching "${query}":`,
+          products: res.data?.data || []
+        }
+      }
+    } catch (e) {
+      return { data: { answer: '', products: [] } }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────

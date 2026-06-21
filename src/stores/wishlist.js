@@ -11,7 +11,8 @@ export const useWishlistStore = defineStore('wishlist', {
   getters: {
     isInWishlist: (state) => (productId) => {
       return state.items.some(item => item.product_id === productId)
-    }
+    },
+    count: (state) => state.items.length // FIX 1: Added missing count getter
   },
   
   actions: {
@@ -61,6 +62,18 @@ export const useWishlistStore = defineStore('wishlist', {
           success: false, 
           message: error.response?.data?.message || 'Failed to update wishlist'
         }
+      }
+    },
+
+    // FIX 2: Added missing remove action
+    async remove(itemId) {
+      try {
+        await wishlistService.remove(itemId)
+        // Optimistically update UI
+        this.items = this.items.filter(i => (i.wishlist_id || i.id) !== itemId)
+        return { success: true }
+      } catch (error) {
+        return { success: false, message: error.response?.data?.message || 'Failed to remove from wishlist' }
       }
     }
   }

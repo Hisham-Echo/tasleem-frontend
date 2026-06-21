@@ -6,12 +6,15 @@ export const useCartStore = defineStore('cart', {
   state: () => ({
     items: [],
     isOpen: false,
-    loading: false
+    loading: false,
+    updatingIds: [] // FIX 2: Track which items are currently updating
   }),
   
   getters: {
     totalItems: (state) => state.items.reduce((sum, item) => sum + (item.quantity || 0), 0),
-    totalPrice: (state) => state.items.reduce((sum, item) => sum + (item.product?.price || 0) * (item.quantity || 0), 0),
+    totalPrice: (state) => state.items.reduce((sum, item) => sum + (item.product?.price || item.price || 0) * (item.quantity || 0), 0),
+    isEmpty: (state) => state.items.length === 0, // FIX 1: Added missing getter
+    isUpdating: (state) => (id) => state.updatingIds.includes(id) // FIX 2: Added missing getter
   },
   
   actions: {
@@ -64,6 +67,22 @@ export const useCartStore = defineStore('cart', {
         }
       }
     },
+
+    // FIX 2: Added missing updateItem action
+    async updateItem(itemId, quantity) {
+      if (quantity < 1) {
+        return this.removeItem(itemId)
+      }
+      this.updatingIds = [...this.updatingIds, itemId]
+      try {
+        await cartService.updateItem(itemId, { quantity })
+        await this.fetchCart()
+      } catch (error) {
+        console.error('Update item error:', error)
+      } finally {
+        this.updatingIds = this.updatingIds.filter(id => id !== itemId)
+      }
+    },
     
     async removeItem(itemId) {
       try {
@@ -75,7 +94,8 @@ export const useCartStore = defineStore('cart', {
       }
     },
     
-    async clear() {
+    // FIX 3: Renamed from clear() to clearCart() to match view calls
+    async clearCart() {
       const auth = useAuthStore()
       try {
         await cartService.clear(auth.user?.id)

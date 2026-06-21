@@ -77,8 +77,19 @@ const auth = useAuthStore()
 const toast = useToast()
 const cartLoading = ref(false)
 
+// FIX 1: Properly extract URL from object and handle relative paths/HTTP
 const productImage = computed(() => {
-  return props.product.image || props.product.images?.[0]?.url || props.product.images?.[0]
+  let url = props.product.image
+  if (!url && props.product.images && props.product.images.length > 0) {
+    const img = props.product.images[0]
+    url = img.image_url || img.url || (typeof img === 'string' ? img : null)
+  }
+  if (!url) return null
+  
+  if (url.startsWith('http://')) url = url.replace('http://', 'https://')
+  if (!url.startsWith('http')) url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
+  
+  return url
 })
 
 function formatPrice(val) {
@@ -96,7 +107,12 @@ async function addToCart() {
     return
   }
   cartLoading.value = true
-  const res = await cart.addItem(props.product.id)
+  // FIX 2: Pass the correct object structure expected by the store
+  const res = await cart.addItem({
+    product_id: props.product.id,
+    quantity: 1,
+    item_type: 'purchase'
+  })
   if (res.success) {
     toast.success('Added to cart!')
     cart.openCart()
@@ -107,6 +123,11 @@ async function addToCart() {
 }
 
 async function toggleWishlist() {
+  if (!auth.isAuthenticated) {
+    toast.info('Please sign in to save items')
+    router.push({ name: 'Login' })
+    return
+  }
   const res = await wishlist.toggle(props.product.id)
   if (res?.needsAuth) {
     toast.info('Please sign in to save items')
