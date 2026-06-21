@@ -33,12 +33,13 @@
       <!-- Name -->
       <h6 class="card-title text-cream mb-0 text-truncate" style="font-size:.95rem;">{{ product.name }}</h6>
 
-      <!-- Rating -->
-      <div class="d-flex align-items-center gap-1 star-rating" v-if="product.rating">
+      <!-- ✅ FIX: Dynamic Rating and Reviews Count -->
+      <!-- Removed the hardcoded 4 stars and 0 reviews. Now it dynamically calculates based on the product data -->
+      <div class="d-flex align-items-center gap-1 star-rating">
         <template v-for="n in 5" :key="n">
-          <i :class="n <= Math.round(product.rating) ? 'bi bi-star-fill filled' : 'bi bi-star empty'"></i>
+          <i :class="n <= Math.round(displayRating) ? 'bi bi-star-fill filled' : 'bi bi-star empty'"></i>
         </template>
-        <span class="text-muted ms-1" style="font-size:.78rem;">({{ product.reviews_count || 0 }})</span>
+        <span class="text-muted ms-1" style="font-size:.78rem;">({{ displayReviewsCount }})</span>
       </div>
 
       <!-- Price -->
@@ -77,7 +78,29 @@ const auth = useAuthStore()
 const toast = useToast()
 const cartLoading = ref(false)
 
-// FIX 1: Properly extract URL from object and handle relative paths/HTTP
+// ✅ FIX 1: Safely calculate the rating (0 to 5)
+// Handles the backend sending 'rate' as a string (e.g., "4.00") or 'rating' as a number
+const displayRating = computed(() => {
+  let r = props.product.rating
+  if (r === undefined || r === null || r === '') {
+    r = props.product.rate // Fallback to backend's 'rate' key
+  }
+  const num = parseFloat(r)
+  return isNaN(num) ? 0 : Math.max(0, Math.min(5, num)) // Clamp between 0 and 5
+})
+
+// ✅ FIX 2: Safely get the reviews count
+// Falls back to 'pay_count' if the backend doesn't provide 'reviews_count'
+const displayReviewsCount = computed(() => {
+  if (props.product.reviews_count !== undefined && props.product.reviews_count !== null) {
+    return props.product.reviews_count
+  }
+  if (props.product.pay_count !== undefined && props.product.pay_count !== null) {
+    return props.product.pay_count 
+  }
+  return 0
+})
+
 const productImage = computed(() => {
   let url = props.product.image
   if (!url && props.product.images && props.product.images.length > 0) {
@@ -107,7 +130,6 @@ async function addToCart() {
     return
   }
   cartLoading.value = true
-  // FIX 2: Pass the correct object structure expected by the store
   const res = await cart.addItem({
     product_id: props.product.id,
     quantity: 1,
@@ -139,3 +161,72 @@ async function toggleWishlist() {
   else if (res?.error) toast.error(res.error)
 }
 </script>
+
+<style scoped>
+.product-card {
+  background: var(--navy-card);
+  border: 1px solid var(--navy-border);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.product-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--gold);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+.product-img-wrap {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy-bg);
+  overflow: hidden;
+}
+.product-img-wrap img {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+.no-img {
+  font-size: 3rem;
+  color: var(--navy-border);
+}
+.product-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  background: var(--gold);
+  color: var(--navy-bg);
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+.wishlist-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.wishlist-btn.active, .wishlist-btn:hover {
+  background: var(--gold);
+  color: var(--navy-bg);
+}
+.star-rating .filled { color: var(--gold); }
+.star-rating .empty { color: var(--navy-border); }
+.product-price { color: var(--gold); font-weight: bold; font-size: 1.1rem; }
+.product-old-price { color: var(--text-muted); text-decoration: line-through; font-size: 0.85rem; }
+</style>
