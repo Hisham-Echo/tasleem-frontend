@@ -1,203 +1,84 @@
 <template>
   <div>
-    <!-- Header -->
     <div class="page-header">
       <div class="container">
-        <nav aria-label="breadcrumb">
-          <ol class="breadcrumb mb-2">
-            <li class="breadcrumb-item"><RouterLink to="/">Home</RouterLink></li>
-            <li class="breadcrumb-item active">Products</li>
-          </ol>
-        </nav>
-        <h1 class="text-cream mb-0">All Products</h1>
+        <h1 class="text-cream mb-0"><i class="bi bi-grid me-2 text-gold"></i>Our Products</h1>
       </div>
     </div>
 
     <div class="container py-4">
       <div class="row g-4">
-        <!-- Filters sidebar -->
+        <!-- Filters Sidebar -->
         <div class="col-lg-3">
-          <div class="card p-3 sticky-top" style="top:80px;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h6 class="text-cream mb-0">Filters</h6>
-              <button class="btn btn-sm text-gold p-0" @click="resetFilters">Reset</button>
-            </div>
-
-            <!-- Search -->
+          <div class="card filter-card p-3">
+            <h5 class="text-cream mb-3">Filters</h5>
+            
             <div class="mb-3">
-              <label class="form-label">Search</label>
-              <input 
-                v-model="filters.search" 
-                type="search" 
-                class="form-control form-control-sm" 
-                placeholder="Search products..." 
-                @input="debouncedFetch" 
-              />
-            </div>
-
-            <!-- Category -->
-            <div class="mb-3">
-              <label class="form-label">Category</label>
-              <select 
-                v-model="filters.category_id" 
-                class="form-select form-select-sm" 
-                @change="onCategoryChange"
-              >
-                <option value="">All Categories</option>
-                <option 
-                  v-for="cat in categories" 
-                  :key="cat.category_id || cat.id" 
-                  :value="String(cat.category_id || cat.id)"
-                >
-                  {{ cat.name }}
-                </option>
+              <label class="form-label text-muted">Category</label>
+              <select class="form-select" v-model="filters.category_id">
+                <option :value="null">All Categories</option>
+                <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
               </select>
             </div>
 
-            <!-- Rentable toggle -->
             <div class="mb-3">
-              <div class="form-check">
-                <input 
-                  class="form-check-input" 
-                  type="checkbox" 
-                  v-model="filters.rentable" 
-                  id="rentable" 
-                  @change="fetchProducts(1)" 
-                />
-                <label class="form-check-label text-muted" for="rentable">Rentable only</label>
+              <label class="form-label text-muted">Price Range</label>
+              <div class="d-flex gap-2">
+                <input type="number" class="form-control" placeholder="Min" v-model.number="filters.min_price" />
+                <input type="number" class="form-control" placeholder="Max" v-model.number="filters.max_price" />
               </div>
             </div>
 
-            <!-- Price range -->
             <div class="mb-3">
-              <label class="form-label">
-                Max Price: <span class="text-gold">{{ formatPrice(filters.max_price) }}</span>
-              </label>
-              <input 
-                type="range" 
-                class="form-range" 
-                v-model="filters.max_price" 
-                min="0" 
-                max="50000" 
-                step="100" 
-                @change="fetchProducts(1)" 
-              />
-              <div class="d-flex justify-content-between text-muted" style="font-size:.75rem;">
-                <span>0</span>
-                <span>50,000 EGP</span>
-              </div>
-            </div>
-
-            <!-- Sort -->
-            <div>
-              <label class="form-label">Sort By</label>
-              <select 
-                v-model="filters.sort" 
-                class="form-select form-select-sm" 
-                @change="onSortChange"
-              >
-                <option value="">Default (Newest)</option>
-                <option value="price_asc">Price: Low to High</option>
+              <label class="form-label text-muted">Sort By</label>
+              <select class="form-select" v-model="filters.sort_by">
+                <option value="created_at">Newest</option>
+                <option value="price">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="rating">Top Rated</option>
-                <option value="popular">Most Popular</option>
+                <option value="rate">Top Rated</option>
               </select>
             </div>
+
+            <button class="btn btn-outline-gold w-100" @click="resetFilters">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Filters
+            </button>
           </div>
         </div>
 
-        <!-- Products grid -->
+        <!-- Products Grid -->
         <div class="col-lg-9">
-          <!-- Toolbar -->
-          <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-            <div class="text-muted" style="font-size:.9rem;">
-              <span v-if="!loading">{{ total }} product{{ total !== 1 ? 's' : '' }} found</span>
-              <span v-else>Loading...</span>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-              <button 
-                class="btn btn-sm" 
-                :class="viewMode === 'grid' ? 'btn-gold' : 'btn-outline-gold'" 
-                @click="viewMode = 'grid'"
-              >
-                <i class="bi bi-grid-3x3-gap"></i>
-              </button>
-              <button 
-                class="btn btn-sm" 
-                :class="viewMode === 'list' ? 'btn-gold' : 'btn-outline-gold'" 
-                @click="viewMode = 'list'"
-              >
-                <i class="bi bi-list"></i>
-              </button>
-            </div>
+          <LoadingSpinner v-if="loading && products.length === 0" height="400px" />
+          
+          <div v-else-if="products.length === 0" class="text-center py-5">
+            <i class="bi bi-box-seam text-muted" style="font-size:3rem;"></i>
+            <h5 class="text-muted mt-3">No products found</h5>
+            <p class="text-muted">Try adjusting your filters.</p>
           </div>
 
-          <!-- Grid view -->
-          <div class="row g-4" v-if="viewMode === 'grid'">
-            <div class="col-6 col-md-4 col-xl-4" v-for="product in products" :key="product.id">
-              <ProductCard :product="product" />
-            </div>
-            <div class="col-6 col-md-4 col-xl-4" v-if="loading" v-for="n in 9" :key="'sk'+n">
-              <ProductSkeleton />
-            </div>
-          </div>
-
-          <!-- List view -->
-          <div class="d-flex flex-column gap-3" v-else>
-            <div 
-              class="card card-hover p-0 overflow-hidden" 
-              v-for="product in products" 
-              :key="product.id" 
-              @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" 
-              style="cursor:pointer;"
-            >
-              <div class="d-flex">
-                <div style="width:140px; flex-shrink:0; background:var(--navy-light); height:120px; overflow:hidden;">
-                  <img 
-                    :src="getProductImage(product)" 
-                    :alt="product.name" 
-                    style="width:100%; height:100%; object-fit:cover;" 
-                    v-if="getProductImage(product)" 
-                  />
-                  <div class="d-flex align-items-center justify-content-center h-100" v-else>
-                    <i class="bi bi-image text-muted fs-3"></i>
-                  </div>
-                </div>
-                <div class="p-3 flex-grow-1 d-flex align-items-center justify-content-between">
-                  <div>
-                    <span class="badge badge-gold mb-1" v-if="product.category">{{ product.category?.name }}</span>
-                    <h6 class="text-cream mb-1">{{ product.name }}</h6>
-                    <p class="text-muted mb-0" style="font-size:.82rem; display:-webkit-box; line-clamp:2; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
-                      {{ product.description?.slice(0, 80) }}...
-                    </p>
-                  </div>
-                  <div class="text-end ms-3 flex-shrink-0">
-                    <div class="product-price mb-2">{{ formatPrice(product.price) }}</div>
-                    <button class="btn btn-gold btn-sm" @click.stop="addToCart(product)">
-                      <i class="bi bi-bag-plus me-1"></i>Add
-                    </button>
-                  </div>
-                </div>
+          <div v-else>
+            <div class="row g-4">
+              <div class="col-6 col-md-4" v-for="product in products" :key="product.id">
+                <ProductCard :product="product" />
               </div>
             </div>
-          </div>
 
-          <!-- Empty state -->
-          <div v-if="!loading && products.length === 0" class="text-center py-5">
-            <i class="bi bi-search text-muted" style="font-size:3rem;"></i>
-            <h5 class="text-muted mt-3">No products found</h5>
-            <button class="btn btn-outline-gold btn-sm mt-2" @click="resetFilters">Clear Filters</button>
+            <!-- Pagination -->
+            <div class="d-flex justify-content-center mt-5" v-if="totalPages > 1">
+              <nav>
+                <ul class="pagination">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)">Previous</a>
+                  </li>
+                  <li class="page-item" v-for="p in visiblePages" :key="p" :class="{ active: currentPage === p }">
+                    <a class="page-link" href="#" @click.prevent="changePage(p)">{{ p }}</a>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)">Next</a>
+                  </li>
+                </ul>
+              </nav>
+            </div>
           </div>
-
-          <!-- Pagination -->
-          <Pagination 
-            v-if="totalPages > 1"
-            :current-page="currentPage" 
-            :total-pages="totalPages" 
-            @change="fetchProducts" 
-          />
         </div>
       </div>
     </div>
@@ -205,180 +86,125 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { productService, categoryService } from '@/services/api'
-import { useCartStore } from '@/stores/cart'
-import { useAuthStore } from '@/stores/auth'
-import { useToast } from 'vue-toastification'
 import ProductCard from '@/components/ui/ProductCard.vue'
-import ProductSkeleton from '@/components/ui/ProductSkeleton.vue'
-import Pagination from '@/components/ui/Pagination.vue'
-
-const route = useRoute()
-const router = useRouter()
-const cart = useCartStore()
-const auth = useAuthStore()
-const toast = useToast()
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 
 const products = ref([])
 const categories = ref([])
 const loading = ref(true)
-const total = ref(0)
-const currentPage = ref(1)
 const totalPages = ref(1)
-const viewMode = ref('grid')
+const currentPage = ref(1)
 
+// FIX 1: Request 24 items per page instead of 9
 const filters = reactive({
-  search: route.query.search || '',
-  category_id: route.query.category_id ? String(route.query.category_id) : '',
-  rentable: route.query.rentable === '1',
-  max_price: 50000,
-  sort: route.query.sort || ''
+  category_id: null,
+  min_price: null,
+  max_price: null,
+  sort_by: 'created_at',
+  per_page: 24 
 })
 
-let debounceTimer = null
-function debouncedFetch() {
-  clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => fetchProducts(1), 400)
-}
-
-function formatPrice(val) {
-  return new Intl.NumberFormat('en-EG', { 
-    style: 'currency', 
-    currency: 'EGP', 
-    maximumFractionDigits: 0 
-  }).format(val || 0)
-}
-
-function getProductImage(product) {
-  if (product.images && product.images.length > 0) {
-    const img = product.images[0]
-    let url = img.image_url || img.url || img
-    if (!url) return null
-    
-    // Force HTTPS
-    if (url.startsWith('http://')) url = url.replace('http://', 'https://')
-    if (!url.startsWith('http')) url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
-    
-    return url
+// Helper to show a clean range of page numbers (e.g., 1 2 3 ... 10)
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  let pages = []
+  
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i)
+  } else {
+    if (current <= 3) pages = [1, 2, 3, 4, '...', total]
+    else if (current >= total - 2) pages = [1, '...', total - 3, total - 2, total - 1, total]
+    else pages = [1, '...', current - 1, current, current + 1, '...', total]
   }
-  
-  let url = product.image || null
-  if (!url) return null
-  if (url.startsWith('http://')) url = url.replace('http://', 'https://')
-  if (!url.startsWith('http')) url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
-  
-  return url
-}
+  return pages
+})
 
-function getSortParams(sortValue) {
-  const sortMap = {
-    'price_asc': { sort_by: 'price', sort_order: 'asc' },
-    'price_desc': { sort_by: 'price', sort_order: 'desc' },
-    'newest': { sort_by: 'created_at', sort_order: 'desc' },
-    'oldest': { sort_by: 'created_at', sort_order: 'asc' },
-    'rating': { sort_by: 'rate', sort_order: 'desc' },
-    'popular': { sort_by: 'view_count', sort_order: 'desc' }
-  }
-  return sortMap[sortValue] || { sort_by: 'created_at', sort_order: 'desc' }
-}
-
-function onCategoryChange(event) {
-  const value = event.target.value
-  filters.category_id = value
-  fetchProducts(1)
-}
-
-function onSortChange() {
-  fetchProducts(1)
-}
-
-async function fetchProducts(page = 1) {
-  loading.value = true
-  currentPage.value = page
-  
+async function fetchCategories() {
   try {
-    const sortParams = getSortParams(filters.sort)
+    const res = await categoryService.getAll()
+    categories.value = res.data?.data || res.data || []
+  } catch (_) {}
+}
+
+async function fetchProducts() {
+  loading.value = true
+  try {
+    // Clean null values from filters
+    const params = Object.fromEntries(
+      Object.entries(filters).filter(([_, v]) => v !== null && v !== '')
+    )
     
-    const params = {
-      page,
-      per_page: 9,
-      search: filters.search || undefined,
-      category_id: (filters.category_id && filters.category_id !== '') ? filters.category_id : undefined,
-      type: filters.rentable ? 'rental' : undefined,
-      max_price: filters.max_price < 50000 ? filters.max_price : undefined,
-      sort_by: sortParams.sort_by,
-      sort_order: sortParams.sort_order
-    }
-    
-    Object.keys(params).forEach(key => {
-      if (params[key] === undefined || params[key] === null || params[key] === '') {
-        delete params[key]
-      }
-    })
-    
+    // Ensure page is included
+    params.page = currentPage.value
+
     const res = await productService.getAll(params)
-    const data = res.data?.data || res.data
+    const rawProducts = res.data?.data || []
     
-    if (data.data) {
-      products.value = data.data
-      total.value = data.total || data.data.length
-      totalPages.value = data.last_page || Math.ceil(total.value / 9) || 1
-    } else if (Array.isArray(data)) {
-      products.value = data
-      total.value = data.length
-      totalPages.value = 1
-    } else {
-      products.value = []
-      total.value = 0
-      totalPages.value = 0
-    }
-  } catch (e) {
-    console.error('Failed to fetch products:', e)
+    // FIX 2: Map backend keys to frontend keys so ProductCard works perfectly
+    products.value = rawProducts.map(p => ({
+      ...p,
+      // Backend sends 'quantity', frontend expects 'stock'
+      stock: p.quantity ?? p.stock ?? 0,
+      // Backend sends 'rate' as string "4.00", frontend expects 'rating' as number
+      rating: parseFloat(p.rate) || p.rating || 0,
+      // Backend sends 'owner', frontend expects 'seller'
+      seller: p.owner ?? p.seller ?? null,
+      // Backend sends 'type: "rental"', frontend expects boolean 'is_rentable'
+      is_rentable: p.type === 'rental' || !!p.is_rentable,
+      // Map rental price if needed
+      daily_rental_price: p.rental_price ?? p.daily_rental_price ?? 0
+    }))
+
+    // FIX 3: Read 'pagination' instead of 'meta' (based on your actual JSON response)
+    const pagination = res.data?.pagination || res.data?.meta || {}
+    totalPages.value = pagination.last_page || 1
+    currentPage.value = pagination.current_page || 1
+    
+  } catch (error) {
+    console.error('Fetch products error:', error)
     products.value = []
-    toast.error('Failed to load products')
   } finally {
     loading.value = false
   }
 }
 
-async function addToCart(product) {
-  if (!auth.isAuthenticated) { 
-    toast.info('Please sign in to add to cart')
-    return 
-  }
-  const res = await cart.addItem({
-    product_id: product.id,
-    quantity: 1,
-    item_type: 'purchase'
-  })
-  if (res.success) { 
-    toast.success('Added to cart!')
-    cart.openCart() 
-  } else {
-    toast.error(res.message || 'Failed to add to cart')
-  }
-}
-
 function resetFilters() {
-  filters.search = ''
-  filters.category_id = ''
-  filters.rentable = false
-  filters.max_price = 50000
-  filters.sort = ''
-  fetchProducts(1)
+  filters.category_id = null
+  filters.min_price = null
+  filters.max_price = null
+  filters.sort_by = 'created_at'
+  currentPage.value = 1
 }
 
-onMounted(async () => {
-  try {
-    const catRes = await categoryService.getAll()
-    categories.value = catRes.data?.data || catRes.data || []
-  } catch (e) {
-    console.error('Failed to load categories:', e)
-    toast.error('Failed to load categories')
-  }
-  
-  await fetchProducts(1)
+function changePage(p) {
+  if (p < 1 || p > totalPages.value || p === '...') return
+  currentPage.value = p
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+// Watch filters to reset to page 1 when filters change
+watch(filters, () => {
+  currentPage.value = 1
+  fetchProducts()
+}, { deep: true })
+
+// Watch currentPage to fetch new page
+watch(currentPage, () => {
+  fetchProducts()
+})
+
+onMounted(() => {
+  fetchCategories()
+  fetchProducts()
 })
 </script>
+
+<style scoped>
+.filter-card { background: var(--navy-card); border: 1px solid var(--navy-border); position: sticky; top: 100px; }
+.page-link { background: var(--navy-card); border-color: var(--navy-border); color: var(--cream); }
+.page-item.active .page-link { background: var(--gold); border-color: var(--gold); color: var(--navy-bg); }
+.page-link:hover { background: var(--navy-hover); color: var(--gold); }
+</style>

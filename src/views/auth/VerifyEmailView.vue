@@ -1,89 +1,109 @@
 <template>
-  <div class="d-flex align-items-center justify-content-center" style="min-height:100vh;background:linear-gradient(135deg,#06101e,#0d1b2e);">
-    <div class="card p-5 text-center" style="max-width:460px;width:100%;border-radius:1.25rem;">
-      <div class="mx-auto mb-4" style="width:80px;height:80px;border-radius:50%;background:rgba(201,169,110,.1);display:flex;align-items:center;justify-content:center;border:2px solid rgba(201,169,110,.25);">
-        <i class="bi bi-envelope-exclamation text-gold" style="font-size:2.2rem;"></i>
-      </div>
-      <h4 class="text-cream mb-2">Verify your email</h4>
-      <p class="text-muted mb-1" style="font-size:.9rem;">We sent a verification link to</p>
-      <p class="text-gold fw-600 mb-4">{{ auth.user?.email }}</p>
-      <p class="text-muted mb-4" style="font-size:.85rem;">Click the link in your email to activate your account. If you don't see it, check your spam folder.</p>
-
-      <div class="alert py-2 px-3 mb-3" style="background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.25);border-radius:.6rem;font-size:.85rem;" v-if="resentOk">
-        <i class="bi bi-check-circle me-2"></i>Verification email resent!
-      </div>
-      <div class="alert py-2 px-3 mb-3" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);border-radius:.6rem;font-size:.85rem;" v-if="errorMsg">
-        <i class="bi bi-exclamation-circle me-2"></i>{{ errorMsg }}
+  <div class="auth-container d-flex align-items-center justify-content-center min-vh-100">
+    <div class="card auth-card p-4 p-md-5 shadow-lg text-center">
+      <div v-if="verifying" class="py-4">
+        <div class="spinner-border text-gold mb-3" style="width: 3rem; height: 3rem;"></div>
+        <h4 class="text-cream mb-2">Verifying your email...</h4>
+        <p class="text-muted">Please wait a moment.</p>
       </div>
 
-      <button class="btn btn-gold w-100 mb-2" @click="resend" :disabled="auth.loading || cooldown > 0">
-        <span class="spinner-border spinner-border-sm me-2" v-if="auth.loading"></span>
-        {{ cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Verification Email' }}
-      </button>
-      <button class="btn btn-outline-gold w-100" @click="checkVerification">
-        I've verified my email
-      </button>
-      <hr style="border-color:var(--navy-border);margin:1.5rem 0;" />
-      <button class="btn btn-link text-muted btn-sm" @click="logout">Sign out and use a different account</button>
+      <div v-else-if="verified" class="py-4">
+        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+        <h4 class="text-cream mt-3 mb-2">Email Verified!</h4>
+        <p class="text-muted">Your email has been successfully verified. You can now access all features.</p>
+        <RouterLink to="/" class="btn btn-gold mt-2">Go to Home</RouterLink>
+      </div>
+
+      <div v-else-if="error" class="py-4">
+        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 4rem;"></i>
+        <h4 class="text-cream mt-3 mb-2">Verification Failed</h4>
+        <p class="text-muted">{{ error }}</p>
+        <button class="btn btn-gold mt-2" @click="resendVerification" :disabled="resending">
+          <span v-if="resending" class="spinner-border spinner-border-sm me-2"></span>
+          Resend Verification Email
+        </button>
+        <div v-if="resent" class="alert alert-success mt-3 py-2 mb-0">Verification email sent!</div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import api, { authService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from 'vue-toastification'
 
-const router = useRouter()
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
+const toast = useToast()
 
-const resentOk = ref(false)
-const errorMsg = ref('')
-const cooldown = ref(0)
-let timer = null
+const verifying = ref(true)
+const verified = ref(false)
+const error = ref('')
+const resending = ref(false)
+const resent = ref(false)
 
-async function resend() {
-  resentOk.value = false
-  errorMsg.value = ''
+async function verifyEmail() {
+  verifying.value = true
+  error.value = ''
+  
+  // FIX 1: Extract parameters from URL
+  const id = route.params.id || route.query.id
+  const hash = route.params.hash || route.query.hash
+  const token = route.query.token
+
   try {
-    const res = await auth.resendVerification()
-    if (res.success) {
-      resentOk.value = true
-      cooldown.value = 60
-      timer = setInterval(() => {
-        if (--cooldown.value <= 0) clearInterval(timer)
-      }, 1000)
+    // Try standard Laravel email verification first
+    if (id && hash) {
+      await api.get(`/email/verify/${id}/${hash}`)
+    } else if (token) {
+      // Fallback for token-based verification
+      await authService.resendVerification({ token }) // Assuming backend handles token verification here or via a specific endpoint
     } else {
-      errorMsg.value = res.message || 'Could not send verification email. Please try again later.'
+      throw new Error('Invalid verification link.')
     }
-  } catch (_) {
-    errorMsg.value = 'Could not send verification email. Please try again later.'
+    
+    verified.value = true
+    // FIX 3: Update local user state so the banner disappears
+    if (auth.user) {
+      auth.user.email_verified_at = new Date().toISOString()
+      localStorage.setItem('tasleem_user', JSON.stringify(auth.user))
+    }
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'The verification link is invalid or has expired.'
+  } finally {
+    verifying.value = false
   }
 }
 
-async function checkVerification() {
-  errorMsg.value = ''
-  await auth.fetchMe()
-  if (!auth.needsVerification) {
-    router.push(route.query.redirect || '/')
-  } else {
-    errorMsg.value = 'Email not verified yet. Please click the link in your inbox.'
+async function resendVerification() {
+  resending.value = true
+  resent.value = false
+  try {
+    await authService.resendVerification()
+    resent.value = true
+    toast.success('Verification email sent!')
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to resend verification email.')
+  } finally {
+    resending.value = false
   }
-}
-
-async function logout() {
-  await auth.logout()
-  router.push('/login')
 }
 
 onMounted(() => {
-  if (!auth.needsVerification) {
+  // If already verified, redirect
+  if (auth.user?.email_verified_at) {
     router.push('/')
+    return
   }
-})
-
-onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
+  verifyEmail()
 })
 </script>
+
+<style scoped>
+.auth-container { background: var(--navy-bg); }
+.auth-card { background: var(--navy-card); border: 1px solid var(--navy-border); width: 100%; max-width: 500px; border-radius: 1rem; }
+</style>

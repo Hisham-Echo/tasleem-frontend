@@ -2,129 +2,49 @@
   <div>
     <div class="page-header">
       <div class="container">
-        <div class="d-flex align-items-center gap-3">
-          <div class="p-2 rounded-xl" style="background:rgba(201,169,110,.1);border:1px solid rgba(201,169,110,.2);">
-            <i class="bi bi-shield-fill-check text-gold" style="font-size:1.5rem;"></i>
-          </div>
-          <div>
-            <h1 class="text-cream mb-0">Admin Dashboard</h1>
-            <p class="text-muted mb-0" style="font-size:.85rem;">Platform overview & management</p>
-          </div>
-        </div>
+        <h1 class="text-cream mb-0"><i class="bi bi-speedometer2 me-2 text-gold"></i>Admin Dashboard</h1>
       </div>
     </div>
 
     <div class="container py-4">
-      <!-- KPI cards -->
-      <div class="row g-3 mb-5">
-        <div class="col-6 col-md-3" v-for="kpi in kpis" :key="kpi.label">
-          <div class="card p-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted" style="font-size:.8rem;text-transform:uppercase;letter-spacing:.07em;">{{ kpi.label }}</span>
-              <div class="p-2 rounded" :style="{background: kpi.bg}">
-                <i :class="kpi.icon" :style="{color: kpi.color, fontSize:'1rem'}"></i>
+      <LoadingSpinner v-if="loading" height="300px" />
+
+      <div v-else>
+        <!-- Stats Cards -->
+        <div class="row g-4 mb-4">
+          <div class="col-md-6 col-xl-3" v-for="stat in statCards" :key="stat.label">
+            <div class="card stat-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="text-muted mb-1">{{ stat.label }}</h6>
+                  <h3 class="text-cream mb-0">{{ stat.value }}</h3>
+                </div>
+                <i :class="stat.icon" class="text-gold" style="font-size: 2.5rem; opacity: 0.8;"></i>
               </div>
             </div>
-            <div class="text-cream" style="font-size:1.75rem;font-weight:800;line-height:1;">
-              <span v-if="kpi.loading" class="skeleton d-inline-block" style="width:60px;height:1.75rem;"></span>
-              <span v-else>{{ kpi.value }}</span>
-            </div>
-            <div class="text-muted mt-1" style="font-size:.75rem;">{{ kpi.sub }}</div>
           </div>
         </div>
-      </div>
 
-      <!-- Quick links -->
-      <div class="row g-3 mb-5">
-        <div class="col-md-6">
-          <RouterLink to="/admin/users" class="card p-4 d-flex flex-row align-items-center gap-3 card-hover text-decoration-none">
-            <div style="width:52px;height:52px;border-radius:1rem;background:rgba(52,152,219,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="bi bi-people text-info" style="font-size:1.5rem;"></i>
+        <!-- Quick Actions -->
+        <div class="card admin-card p-4">
+          <h5 class="text-cream mb-3">Quick Actions</h5>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <RouterLink to="/admin/users" class="btn btn-outline-gold w-100 py-3">
+                <i class="bi bi-people me-2"></i>Manage Users
+              </RouterLink>
             </div>
-            <div>
-              <div class="text-cream fw-600">User Management</div>
-              <div class="text-muted" style="font-size:.83rem;">View, edit, and manage all user accounts and roles</div>
+            <div class="col-md-4">
+              <RouterLink to="/admin/logs" class="btn btn-outline-gold w-100 py-3">
+                <i class="bi bi-journal-text me-2"></i>View System Logs
+              </RouterLink>
             </div>
-            <i class="bi bi-arrow-right text-muted ms-auto"></i>
-          </RouterLink>
-        </div>
-        <div class="col-md-6">
-          <RouterLink to="/admin/logs" class="card p-4 d-flex flex-row align-items-center gap-3 card-hover text-decoration-none">
-            <div style="width:52px;height:52px;border-radius:1rem;background:rgba(201,169,110,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="bi bi-journal-code text-gold" style="font-size:1.5rem;"></i>
+            <div class="col-md-4">
+              <RouterLink to="/products" class="btn btn-outline-gold w-100 py-3">
+                <i class="bi bi-box-seam me-2"></i>Browse All Products
+              </RouterLink>
             </div>
-            <div>
-              <div class="text-cream fw-600">Activity Logs</div>
-              <div class="text-muted" style="font-size:.83rem;">Track all system actions, entity changes, and audit trail</div>
-            </div>
-            <i class="bi bi-arrow-right text-muted ms-auto"></i>
-          </RouterLink>
-        </div>
-        <div class="col-md-6">
-          <RouterLink to="/products" class="card p-4 d-flex flex-row align-items-center gap-3 card-hover text-decoration-none">
-            <div style="width:52px;height:52px;border-radius:1rem;background:rgba(46,204,113,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="bi bi-box-seam" style="font-size:1.5rem;color:#2ecc71;"></i>
-            </div>
-            <div>
-              <div class="text-cream fw-600">Products</div>
-              <div class="text-muted" style="font-size:.83rem;">Browse and manage all marketplace listings</div>
-            </div>
-            <i class="bi bi-arrow-right text-muted ms-auto"></i>
-          </RouterLink>
-        </div>
-        <div class="col-md-6">
-          <RouterLink to="/payments" class="card p-4 d-flex flex-row align-items-center gap-3 card-hover text-decoration-none">
-            <div style="width:52px;height:52px;border-radius:1rem;background:rgba(155,89,182,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="bi bi-credit-card" style="font-size:1.5rem;color:#9b59b6;"></i>
-            </div>
-            <div>
-              <div class="text-cream fw-600">Payments</div>
-              <div class="text-muted" style="font-size:.83rem;">Review all payment transactions and statuses</div>
-            </div>
-            <i class="bi bi-arrow-right text-muted ms-auto"></i>
-          </RouterLink>
-        </div>
-      </div>
-
-      <!-- Recent users -->
-      <div class="card p-0 overflow-hidden">
-        <div class="card-header px-4 py-3 d-flex align-items-center justify-content-between">
-          <h6 class="text-cream mb-0">Recent Users</h6>
-          <RouterLink class="btn btn-outline-gold btn-sm" to="/admin/users">View All</RouterLink>
-        </div>
-        <LoadingSpinner v-if="usersLoading" height="160px" />
-        <div class="table-responsive" v-else>
-          <table class="table mb-0">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="user in recentUsers" :key="user.id">
-                <td>
-                  <div class="d-flex align-items-center gap-2">
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold-dark),var(--gold));display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:var(--navy);flex-shrink:0;">
-                      {{ (user.name||'U')[0].toUpperCase() }}
-                    </div>
-                    <span class="text-cream" style="font-size:.88rem;">{{ user.name }}</span>
-                  </div>
-                </td>
-                <td class="text-muted" style="font-size:.85rem;">{{ user.email }}</td>
-                <td><span class="badge" :class="roleBadge(user.role)">{{ user.role || 'user' }}</span></td>
-                <td class="text-muted" style="font-size:.82rem;">{{ formatDate(user.created_at) }}</td>
-                <td>
-                  <RouterLink :to="`/admin/users`" class="btn btn-sm btn-outline-gold px-2 py-1">
-                    <i class="bi bi-arrow-right"></i>
-                  </RouterLink>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          </div>
         </div>
       </div>
     </div>
@@ -133,42 +53,70 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { userService, productService, orderService } from '@/services/api'
+import { logService } from '@/services/api'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 
-const recentUsers = ref([])
-const usersLoading = ref(true)
-const counts = ref({ users: 0, products: 0, orders: 0, revenue: 0 })
-const countsLoading = ref(true)
+const loading = ref(true)
+const statsData = ref({
+  total_users: 0,
+  total_products: 0,
+  total_orders: 0,
+  total_revenue: 0
+})
 
-const kpis = computed(() => [
-  { label: 'Total Users',    value: counts.value.users,    icon: 'bi bi-people-fill',    color: '#3498db', bg: 'rgba(52,152,219,.1)',    sub: 'Registered accounts', loading: countsLoading.value },
-  { label: 'Products',       value: counts.value.products,  icon: 'bi bi-box-seam-fill',  color: '#2ecc71', bg: 'rgba(46,204,113,.1)',    sub: 'Active listings', loading: countsLoading.value },
-  { label: 'Orders',         value: counts.value.orders,    icon: 'bi bi-bag-check-fill', color: 'var(--gold)', bg: 'rgba(201,169,110,.1)', sub: 'All time', loading: countsLoading.value },
-  { label: 'Revenue (EGP)',  value: formatPrice(counts.value.revenue), icon: 'bi bi-cash-coin', color: '#9b59b6', bg: 'rgba(155,89,182,.1)', sub: 'Total processed', loading: countsLoading.value },
+const statCards = computed(() => [
+  { 
+    label: 'Total Users', 
+    value: statsData.value.total_users.toLocaleString(), 
+    icon: 'bi bi-people-fill' 
+  },
+  { 
+    label: 'Total Products', 
+    value: statsData.value.total_products.toLocaleString(), 
+    icon: 'bi bi-box-seam-fill' 
+  },
+  { 
+    label: 'Total Orders', 
+    value: statsData.value.total_orders.toLocaleString(), 
+    icon: 'bi bi-bag-check-fill' 
+  },
+  { 
+    label: 'Total Revenue', 
+    value: formatPrice(statsData.value.total_revenue), 
+    icon: 'bi bi-cash-stack' 
+  }
 ])
 
-function formatPrice(v) { return new Intl.NumberFormat('en-EG', { notation: 'compact', maximumFractionDigits: 1 }).format(v || 0) }
-function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-EG', { month:'short', day:'numeric', year:'numeric' }) : '—' }
-function roleBadge(role) {
-  const m = { admin: 'bg-danger', seller: 'bg-warning text-dark', user: 'badge-gold' }
-  return m[role] || 'badge-gold'
+function formatPrice(v) {
+  return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP' }).format(v || 0)
 }
 
-onMounted(async () => {
+async function fetchStats() {
+  loading.value = true
   try {
-    const [usersRes, prodRes, ordersRes] = await Promise.all([
-      userService.getAll({ per_page: 5, page: 1 }),
-      productService.getAll({ per_page: 1 }),
-      orderService.getAll({ per_page: 1 })
-    ])
-    recentUsers.value = usersRes.data?.data || usersRes.data || []
-    counts.value = {
-      users: usersRes.data?.total || recentUsers.value.length,
-      products: prodRes.data?.total || 0,
-      orders: ordersRes.data?.total || 0,
-      revenue: 0
+    // FIX 1 & 2: Fetch real stats from the backend and handle errors gracefully
+    const res = await logService.getStats()
+    const data = res.data?.data || res.data || {}
+    
+    statsData.value = {
+      total_users: data.total_users || 0,
+      total_products: data.total_products || 0,
+      total_orders: data.total_orders || 0,
+      total_revenue: data.total_revenue || 0
     }
-  } catch (_) {} finally { usersLoading.value = false; countsLoading.value = false }
-})
+  } catch (error) {
+    console.error('Fetch admin stats error:', error)
+    // Keep default 0 values if API fails
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchStats)
 </script>
+
+<style scoped>
+.stat-card { background: var(--navy-card); border: 1px solid var(--navy-border); border-radius: 1rem; transition: transform 0.2s; }
+.stat-card:hover { transform: translateY(-3px); }
+.admin-card { background: var(--navy-card); border: 1px solid var(--navy-border); border-radius: 1rem; }
+</style>

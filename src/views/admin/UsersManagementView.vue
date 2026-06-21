@@ -2,249 +2,163 @@
   <div>
     <div class="page-header">
       <div class="container">
-        <nav aria-label="breadcrumb">
-          <ol class="breadcrumb mb-2">
-            <li class="breadcrumb-item"><RouterLink to="/admin">Admin</RouterLink></li>
-            <li class="breadcrumb-item active">Users</li>
-          </ol>
-        </nav>
-        <h1 class="text-cream mb-0"><i class="bi bi-people me-2 text-gold"></i>User Management</h1>
+        <h1 class="text-cream mb-0"><i class="bi bi-people me-2 text-gold"></i>Users Management</h1>
       </div>
     </div>
 
     <div class="container py-4">
-      <!-- Filters -->
-      <div class="card p-3 mb-4">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-4">
-            <label class="form-label">Search</label>
-            <div class="input-group input-group-sm">
-              <span class="input-group-text"><i class="bi bi-search"></i></span>
-              <input v-model="filters.search" type="search" class="form-control" placeholder="Name or email..." @input="debouncedFetch" />
-            </div>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Role</label>
-            <select v-model="filters.role" class="form-select form-select-sm" @change="fetchUsers(1)">
-              <option value="">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="seller">Seller</option>
-              <option value="user">User</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Status</label>
-            <select v-model="filters.status" class="form-select form-select-sm" @change="fetchUsers(1)">
-              <option value="">All</option>
-              <option value="1">Active</option>
-              <option value="0">Inactive</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <button class="btn btn-outline-gold btn-sm w-100" @click="resetFilters">
-              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
-            </button>
+      <div class="card admin-card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h5 class="text-cream mb-0">All Users</h5>
+          <div class="d-flex gap-2">
+            <input type="text" class="form-control bg-dark border-secondary text-cream" placeholder="Search users..." v-model="searchQuery" @input="debouncedFetch" />
           </div>
         </div>
-      </div>
 
-      <!-- Table -->
-      <div class="card p-0 overflow-hidden">
-        <div class="card-header px-4 py-3 d-flex align-items-center justify-content-between">
-          <span class="text-cream">{{ total }} user{{ total !== 1 ? 's' : '' }}</span>
-          <button class="btn btn-gold btn-sm" @click="showCreateModal = true">
-            <i class="bi bi-person-plus me-1"></i>Add User
-          </button>
+        <LoadingSpinner v-if="loading && users.length === 0" height="200px" />
+        
+        <div v-else-if="users.length === 0" class="text-center py-4 text-muted">
+          No users found.
         </div>
-        <LoadingSpinner v-if="loading" height="200px" />
-        <div class="table-responsive" v-else>
-          <table class="table mb-0">
+
+        <div v-else class="table-responsive">
+          <table class="table table-dark table-hover mb-0 align-middle">
             <thead>
               <tr>
-                <th>User</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Role</th>
-                <th>Verified</th>
-                <th>Joined</th>
-                <th>Actions</th>
+                <th class="text-muted">ID</th>
+                <th class="text-muted">Name</th>
+                <th class="text-muted">Email</th>
+                <th class="text-muted">Role</th>
+                <th class="text-muted">Status</th>
+                <th class="text-muted">Joined</th>
+                <th class="text-muted">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="users.length === 0">
-                <td colspan="7" class="text-center text-muted py-4">No users found</td>
-              </tr>
               <tr v-for="user in users" :key="user.id">
+                <td class="text-cream">#{{ user.id }}</td>
+                <td class="text-cream">{{ user.name }}</td>
+                <td class="text-muted">{{ user.email }}</td>
                 <td>
-                  <div class="d-flex align-items-center gap-2">
-                    <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold-dark),var(--gold));display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:var(--navy);flex-shrink:0;">
-                      {{ (user.name||'U')[0].toUpperCase() }}
-                    </div>
-                    <span class="text-cream" style="font-size:.88rem;">{{ user.name }}</span>
-                  </div>
-                </td>
-                <td class="text-muted" style="font-size:.85rem;">{{ user.email }}</td>
-                <td class="text-muted" style="font-size:.85rem;">{{ user.phone || '—' }}</td>
-                <td>
-                  <select class="form-select form-select-sm" style="width:110px;background:var(--navy-light);" :value="user.role" @change="updateRole(user, $event.target.value)">
-                    <option value="user">User</option>
-                    <option value="seller">Seller</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  <span class="badge" :class="user.role === 'admin' ? 'bg-danger' : 'bg-info text-dark'">
+                    {{ user.role }}
+                  </span>
                 </td>
                 <td>
-                  <i class="bi" :class="user.email_verified_at ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-danger'"></i>
+                  <span class="badge" :class="user.email_verified_at ? 'bg-success' : 'bg-warning text-dark'">
+                    {{ user.email_verified_at ? 'Verified' : 'Unverified' }}
+                  </span>
                 </td>
-                <td class="text-muted" style="font-size:.82rem;">{{ formatDate(user.created_at) }}</td>
+                <td class="text-muted">{{ formatDate(user.created_at) }}</td>
                 <td>
-                  <div class="d-flex gap-1">
-                    <button class="btn btn-sm px-2 py-1" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);color:#e74c3c;" @click="deleteUser(user)" title="Delete">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </div>
+                  <button class="btn btn-sm btn-outline-danger" @click="confirmDelete(user)" :disabled="user.role === 'admin'">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="px-3 py-2">
-          <Pagination :current-page="currentPage" :total-pages="totalPages" @change="fetchUsers" />
-        </div>
       </div>
     </div>
 
-    <!-- Create User Modal -->
-    <Transition name="fade">
-      <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal=false">
-        <div class="card p-4" style="max-width:460px;width:100%;border-radius:1.25rem;">
-          <div class="d-flex align-items-center justify-content-between mb-4">
-            <h5 class="text-cream mb-0">Create User</h5>
-            <button class="btn-close btn-close-white" @click="showCreateModal=false"></button>
+    <!-- FIX 1: Added Delete Confirmation Modal -->
+    <div class="modal fade" :class="{ show: showDeleteModal }" :style="{ display: showDeleteModal ? 'block' : 'none' }" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--navy-card); border: 1px solid var(--navy-border);">
+          <div class="modal-header border-0">
+            <h5 class="modal-title text-cream">Delete User?</h5>
+            <button type="button" class="btn-close btn-close-white" @click="showDeleteModal = false"></button>
           </div>
-          <form @submit.prevent="createUser" novalidate>
-            <div class="row g-3">
-              <div class="col-12">
-                <label class="form-label">Full Name</label>
-                <input v-model="newUser.name" class="form-control" placeholder="Ahmed Mohamed" />
-              </div>
-              <div class="col-12">
-                <label class="form-label">Email</label>
-                <input v-model="newUser.email" type="email" class="form-control" placeholder="ahmed@example.com" />
-              </div>
-              <div class="col-12">
-                <label class="form-label">Phone</label>
-                <input v-model="newUser.phone" class="form-control" placeholder="01234567890" />
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Role</label>
-                <select v-model="newUser.role" class="form-select">
-                  <option value="user">User</option>
-                  <option value="seller">Seller</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Password</label>
-                <input v-model="newUser.password" type="password" class="form-control" placeholder="Min 8 chars" />
-              </div>
-            </div>
-            <div class="d-flex gap-2 mt-4">
-              <button type="submit" class="btn btn-gold flex-grow-1" :disabled="createLoading">
-                <span class="spinner-border spinner-border-sm me-2" v-if="createLoading"></span>
-                Create User
-              </button>
-              <button type="button" class="btn btn-outline-gold" @click="showCreateModal=false">Cancel</button>
-            </div>
-          </form>
+          <div class="modal-body text-muted">
+            Are you sure you want to delete <strong class="text-cream">{{ userToDelete?.name }}</strong>? This action cannot be undone and will remove all their data.
+          </div>
+          <div class="modal-footer border-0">
+            <button type="button" class="btn btn-outline-secondary" @click="showDeleteModal = false">Cancel</button>
+            <button type="button" class="btn btn-danger" @click="deleteUser" :disabled="deleting">
+              <span v-if="deleting" class="spinner-border spinner-border-sm me-2"></span>
+              Yes, Delete User
+            </button>
+          </div>
         </div>
       </div>
-    </Transition>
+    </div>
+    <div v-if="showDeleteModal" class="modal-backdrop fade show"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { userService } from '@/services/api'
 import { useToast } from 'vue-toastification'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
-import Pagination from '@/components/ui/Pagination.vue'
 
 const toast = useToast()
+
 const users = ref([])
 const loading = ref(true)
-const total = ref(0)
-const currentPage = ref(1)
-const totalPages = ref(1)
-const showCreateModal = ref(false)
-const createLoading = ref(false)
-const filters = reactive({ search: '', role: '', status: '' })
-const newUser = reactive({ name: '', email: '', phone: '', role: 'user', password: '' })
+const searchQuery = ref('')
+const showDeleteModal = ref(false)
+const userToDelete = ref(null)
+const deleting = ref(false)
 
 let debounceTimer = null
-function debouncedFetch() { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => fetchUsers(1), 350) }
 
-function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-EG', { month:'short', day:'numeric', year:'numeric' }) : '—' }
-function resetFilters() { filters.search=''; filters.role=''; filters.status=''; fetchUsers(1) }
+function formatDate(d) {
+  return d ? new Date(d).toLocaleDateString('en-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+}
 
-async function fetchUsers(page = 1) {
+async function fetchUsers() {
   loading.value = true
   try {
-    const params = { page, per_page: 15, search: filters.search||undefined, role: filters.role||undefined, status: filters.status||undefined }
+    const params = {}
+    if (searchQuery.value) params.search = searchQuery.value
+    
     const res = await userService.getAll(params)
     users.value = res.data?.data || res.data || []
-    total.value = res.data?.total || users.value.length
-    totalPages.value = res.data?.last_page || 1
-    currentPage.value = page
-  } catch (_) { users.value = [] } finally { loading.value = false }
-}
-
-async function updateRole(user, newRole) {
-  try {
-    await userService.update(user.id, { role: newRole })
-    user.role = newRole
-    toast.success(`Role updated to ${newRole}`)
-  } catch (err) {
-    toast.error(err.response?.data?.message || 'Failed to update role')
-  }
-}
-
-async function deleteUser(user) {
-  if (!confirm(`Delete user "${user.name}"? This cannot be undone.`)) return
-  try {
-    await userService.delete(user.id)
-    users.value = users.value.filter(u => u.id !== user.id)
-    total.value--
-    toast.success('User deleted')
-  } catch (err) {
-    toast.error(err.response?.data?.message || 'Delete failed')
-  }
-}
-
-async function createUser() {
-  if (!newUser.name || !newUser.email || !newUser.password) { toast.error('Name, email and password are required'); return }
-  createLoading.value = true
-  try {
-    await userService.create({ ...newUser, password_confirmation: newUser.password })
-    toast.success('User created!')
-    showCreateModal.value = false
-    Object.assign(newUser, { name:'', email:'', phone:'', role:'user', password:'' })
-    fetchUsers(1)
-  } catch (err) {
-    toast.error(err.response?.data?.message || 'Failed to create user')
+  } catch (error) {
+    console.error('Fetch users error:', error)
+    users.value = []
   } finally {
-    createLoading.value = false
+    loading.value = false
   }
 }
 
-onMounted(() => fetchUsers())
+function debouncedFetch() {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    fetchUsers()
+  }, 500)
+}
+
+function confirmDelete(user) {
+  userToDelete.value = user
+  showDeleteModal.value = true
+}
+
+async function deleteUser() {
+  if (!userToDelete.value) return
+  deleting.value = true
+  try {
+    await userService.delete(userToDelete.value.id)
+    
+    // FIX 2: Remove the user from the local array immediately to update the UI
+    users.value = users.value.filter(u => u.id !== userToDelete.value.id)
+    
+    showDeleteModal.value = false
+    userToDelete.value = null
+    toast.success('User deleted successfully')
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Failed to delete user')
+  } finally {
+    deleting.value = false
+  }
+}
+
+onMounted(fetchUsers)
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed; inset: 0; z-index: 1060;
-  background: rgba(0,0,0,.65);
-  display: flex; align-items: center; justify-content: center;
-  padding: 1rem;
-  backdrop-filter: blur(4px);
-}
+.admin-card { background: var(--navy-card); border: 1px solid var(--navy-border); border-radius: 1rem; }
+.table-dark { --bs-table-bg: transparent; --bs-table-border-color: var(--navy-border); }
 </style>
