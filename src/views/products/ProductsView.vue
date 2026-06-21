@@ -13,11 +13,15 @@
           <div class="card filter-card p-3">
             <h5 class="text-cream mb-3">Filters</h5>
             
+            <!-- ✅ FIX 2: Category Dropdown -->
             <div class="mb-3">
               <label class="form-label text-muted">Category</label>
               <select class="form-select" v-model="filters.category_id">
                 <option :value="null">All Categories</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                <!-- We use 'cat.category_id || cat.id' because your backend returns 'category_id' -->
+                <option v-for="cat in categories" :key="cat.category_id || cat.id" :value="cat.category_id || cat.id">
+                  {{ cat.name }}
+                </option>
               </select>
             </div>
 
@@ -29,13 +33,15 @@
               </div>
             </div>
 
+            <!-- ✅ FIX 1: Sorting Dropdown -->
             <div class="mb-3">
               <label class="form-label text-muted">Sort By</label>
-              <select class="form-select" v-model="filters.sort_by">
-                <option value="created_at">Newest</option>
-                <option value="price">Price: Low to High</option>
+              <!-- We use @change to parse the value and update both sort_by and sort_order -->
+              <select class="form-select" @change="updateSort($event)">
+                <option value="created_at_desc">Newest</option>
+                <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
-                <option value="rate">Top Rated</option>
+                <option value="rate_desc">Top Rated</option>
               </select>
             </div>
 
@@ -97,12 +103,13 @@ const loading = ref(true)
 const totalPages = ref(1)
 const currentPage = ref(1)
 
-// FIX 1: Request 24 items per page instead of 9
+// ✅ FIX 1: Added 'sort_order' to the filters object
 const filters = reactive({
   category_id: null,
   min_price: null,
   max_price: null,
   sort_by: 'created_at',
+  sort_order: 'desc', // Default to descending for 'Newest'
   per_page: 24 
 })
 
@@ -129,12 +136,22 @@ async function fetchCategories() {
   } catch (_) {}
 }
 
+// ✅ FIX 1: Function to parse the combined sort value (e.g., "price_asc") 
+// and update both the 'sort_by' and 'sort_order' fields in the filters object
+function updateSort(event) {
+  const value = event.target.value 
+  const parts = value.split('_')
+  filters.sort_by = parts[0]   // e.g., "price"
+  filters.sort_order = parts[1] // e.g., "asc"
+}
+
 async function fetchProducts() {
   loading.value = true
   try {
-    // Clean null values from filters
+    // Clean null, undefined, and empty string values from filters
+    // ✅ FIX 2: Added 'v !== undefined' to ensure invalid category IDs aren't sent
     const params = Object.fromEntries(
-      Object.entries(filters).filter(([_, v]) => v !== null && v !== '')
+      Object.entries(filters).filter(([_, v]) => v !== null && v !== '' && v !== undefined)
     )
     
     // Ensure page is included
@@ -143,22 +160,17 @@ async function fetchProducts() {
     const res = await productService.getAll(params)
     const rawProducts = res.data?.data || []
     
-    // FIX 2: Map backend keys to frontend keys so ProductCard works perfectly
+    // Map backend keys to frontend keys so ProductCard works perfectly
     products.value = rawProducts.map(p => ({
       ...p,
-      // Backend sends 'quantity', frontend expects 'stock'
       stock: p.quantity ?? p.stock ?? 0,
-      // Backend sends 'rate' as string "4.00", frontend expects 'rating' as number
       rating: parseFloat(p.rate) || p.rating || 0,
-      // Backend sends 'owner', frontend expects 'seller'
       seller: p.owner ?? p.seller ?? null,
-      // Backend sends 'type: "rental"', frontend expects boolean 'is_rentable'
       is_rentable: p.type === 'rental' || !!p.is_rentable,
-      // Map rental price if needed
       daily_rental_price: p.rental_price ?? p.daily_rental_price ?? 0
     }))
 
-    // FIX 3: Read 'pagination' instead of 'meta' (based on your actual JSON response)
+    // Read 'pagination' instead of 'meta' (based on your actual JSON response)
     const pagination = res.data?.pagination || res.data?.meta || {}
     totalPages.value = pagination.last_page || 1
     currentPage.value = pagination.current_page || 1
@@ -176,6 +188,7 @@ function resetFilters() {
   filters.min_price = null
   filters.max_price = null
   filters.sort_by = 'created_at'
+  filters.sort_order = 'desc' // ✅ Reset sort order as well
   currentPage.value = 1
 }
 
