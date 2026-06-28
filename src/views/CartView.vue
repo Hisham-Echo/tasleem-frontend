@@ -28,7 +28,7 @@
               <div class="p-3 border-bottom cart-item-row" style="border-color:var(--navy-border)!important;" v-for="item in cart.items" :key="item.id">
                 <div class="d-flex gap-3 align-items-start">
                   <div class="rounded-xl overflow-hidden flex-shrink-0" style="width:80px; height:80px; background:var(--navy-light);">
-                    <img :src="item.image || item.product?.image" style="width:100%; height:100%; object-fit:cover;" v-if="item.image || item.product?.image" />
+                    <img :src="cartImg(item)" style="width:100%; height:100%; object-fit:cover;" v-if="cartImg(item)" />
                     <div class="d-flex align-items-center justify-content-center h-100" v-else>
                       <i class="bi bi-image text-muted"></i>
                     </div>
@@ -49,11 +49,12 @@
                       </button>
                       <span class="text-cream px-2" style="min-width:24px;text-align:center;">{{ item.quantity || 1 }}</span>
                       <button class="qty-btn"
-                        @click="cart.updateItem(item.id, (item.quantity || 1) + 1)"
-                        :disabled="cart.isUpdating(item.id)">
+                        @click="incQty(item)"
+                        :disabled="cart.isUpdating(item.id) || atMax(item)">
                         <span v-if="cart.isUpdating(item.id)" class="spinner-border spinner-border-sm" style="width:8px;height:8px;border-width:1.5px;"></span>
                         <i v-else class="bi bi-plus" style="font-size:.7rem;"></i>
                       </button>
+                      <span v-if="atMax(item) && stockOf(item) > 0" class="text-muted ms-1" style="font-size:.72rem;">Max {{ stockOf(item) }} in stock</span>
                     </div>
                   </div>
                   <div class="text-end d-flex flex-column align-items-end gap-2">
@@ -130,12 +131,27 @@
 import { ref, onMounted } from 'vue'
 import { useCartStore } from '@/stores/cart'
 import { useToast } from 'vue-toastification'
+import { productImage } from '@/utils/helpers'
 
 const cart = useCartStore()
 const toast = useToast()
 const shipping = ref(50)
 const discount = ref(0)
 const coupon = ref('')
+
+// Robust thumbnail: prefer the normalized image, fall back to resolving the product.
+const cartImg = item => item.image || productImage(item.product)
+// Available stock for this item (rentals aren't quantity-capped).
+const stockOf = item => Number(item.product?.quantity ?? item.stock ?? 0)
+const atMax = item => item.type !== 'rental' && stockOf(item) > 0 && (item.quantity || 1) >= stockOf(item)
+
+function incQty(item) {
+  if (atMax(item)) {
+    toast.info(`Only ${stockOf(item)} in stock`)
+    return
+  }
+  cart.updateItem(item.id, (item.quantity || 1) + 1)
+}
 
 function formatPrice(v) {
   return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP' }).format(v || 0)

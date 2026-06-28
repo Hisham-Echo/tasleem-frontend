@@ -2,163 +2,325 @@
   <div>
     <div class="page-header">
       <div class="container">
-        <h1 class="text-cream mb-0"><i class="bi bi-person-circle me-2 text-gold"></i>My Profile</h1>
+        <div class="d-flex align-items-center gap-4">
+          <div class="profile-avatar">{{ initials }}</div>
+          <div>
+            <h2 class="text-cream mb-1">{{ auth.fullName }}</h2>
+            <p class="text-muted mb-0" style="font-size:.9rem;">{{ auth.user?.email }}</p>
+            <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+              <span class="badge badge-gold">{{ auth.user?.role || 'User' }}</span>
+              <span v-if="auth.user?.national_id" class="badge bg-secondary" style="font-size:.72rem;" title="National ID (locked)">
+                <i class="bi bi-person-vcard me-1"></i>ID ••••{{ String(auth.user.national_id).slice(-4) }}
+              </span>
+              <TrustBadge :user="auth.user" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="container py-4">
       <div class="row g-4">
-        <!-- Sidebar Tabs -->
+        <!-- Sidebar nav -->
         <div class="col-lg-3">
-          <div class="card profile-card p-3 sticky-top" style="top: 100px;">
-            <div class="text-center mb-3 pb-3 border-bottom" style="border-color: var(--navy-border) !important;">
-              <div class="avatar-circle mx-auto mb-2">{{ initials }}</div>
-              <h6 class="text-cream mb-0">{{ auth.fullName }}</h6>
-              <small class="text-muted">{{ auth.user?.email }}</small>
-            </div>
+          <div class="card p-2 mb-3">
             <ul class="nav nav-pills flex-column gap-1">
               <li class="nav-item" v-for="tab in tabs" :key="tab.key">
-                <button class="nav-link w-100 text-start" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">
-                  <i :class="tab.icon" class="me-2"></i>{{ tab.label }}
+                <button
+                  class="nav-link w-100 text-start d-flex align-items-center gap-2"
+                  :class="{ active: activeTab === tab.key }"
+                  @click="activeTab = tab.key"
+                >
+                  <i :class="tab.icon"></i>
+                  {{ tab.label }}
                 </button>
               </li>
             </ul>
           </div>
+          <!-- Seller CTA -->
+          <div class="card p-3" v-if="!auth.isSeller" style="border:1px dashed rgba(201,169,110,.3);">
+            <div class="text-center">
+              <i class="bi bi-shop text-gold" style="font-size:1.8rem;"></i>
+              <p class="text-cream fw-600 mt-2 mb-1" style="font-size:.9rem;">Start Selling</p>
+              <p class="text-muted mb-3" style="font-size:.78rem;">List your items and earn on Tasleem</p>
+              <RouterLink to="/seller" class="btn btn-gold btn-sm w-100">
+                <i class="bi bi-arrow-right-circle me-1"></i>Become a Seller
+              </RouterLink>
+            </div>
+          </div>
+          <!-- Seller dashboard shortcut -->
+          <div class="card p-3" v-if="auth.isSeller" style="background:rgba(201,169,110,.05);border:1px solid rgba(201,169,110,.2);">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-shop text-gold"></i>
+              <span class="text-cream fw-600" style="font-size:.88rem;">Seller Account</span>
+            </div>
+            <RouterLink to="/seller" class="btn btn-outline-gold btn-sm w-100 mb-1">
+              <i class="bi bi-grid me-1"></i>Dashboard
+            </RouterLink>
+            <RouterLink to="/seller/products/new" class="btn btn-gold btn-sm w-100">
+              <i class="bi bi-plus me-1"></i>New Listing
+            </RouterLink>
+          </div>
+
+          <!-- Wallet + workspaces -->
+          <div class="card p-3 mt-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="text-muted" style="font-size:.8rem;">Wallet balance</span>
+              <span class="text-gold fw-700">EGP {{ Number(auth.user?.wallet_balance || 0).toLocaleString() }}</span>
+            </div>
+            <RouterLink to="/wallet" class="btn btn-outline-gold btn-sm w-100 mb-1"><i class="bi bi-wallet2 me-1"></i>My Wallet</RouterLink>
+            <RouterLink to="/offers" class="btn btn-outline-gold btn-sm w-100 mb-1"><i class="bi bi-tag me-1"></i>Offers</RouterLink>
+            <RouterLink to="/seller/sales" class="btn btn-outline-gold btn-sm w-100"><i class="bi bi-graph-up-arrow me-1"></i>My Sales</RouterLink>
+          </div>
         </div>
 
-        <!-- Content Area -->
+        <!-- Content -->
         <div class="col-lg-9">
-          <!-- Profile Tab -->
-          <div v-if="activeTab === 'profile'" class="card profile-card p-4">
-            <h5 class="text-cream mb-4">Personal Information</h5>
-            <div v-if="profileSuccess" class="alert alert-success py-2">Profile updated successfully!</div>
-            <form @submit.prevent="saveProfile">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label text-muted">Full Name</label>
-                  <input type="text" class="form-control" v-model="profileForm.name" required />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label text-muted">Email Address</label>
-                  <input type="email" class="form-control" v-model="profileForm.email" required />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label text-muted">Phone Number</label>
-                  <input type="tel" class="form-control" v-model="profileForm.phone" />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label text-muted">City</label>
-                  <input type="text" class="form-control" v-model="profileForm.city" />
-                </div>
-                <div class="col-12">
-                  <label class="form-label text-muted">Address</label>
-                  <input type="text" class="form-control" v-model="profileForm.address" />
-                </div>
-                <div class="col-12"><hr style="border-color: var(--navy-border);" /></div>
-                <div class="col-md-6">
-                  <label class="form-label text-muted">New Password (Optional)</label>
-                  <input type="password" class="form-control" v-model="profileForm.password" placeholder="Leave blank to keep current" />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label text-muted">Confirm Password</label>
-                  <input type="password" class="form-control" v-model="profileForm.password_confirmation" />
+
+          <!-- First-2-sales-free promo -->
+          <div v-if="(auth.user?.free_sales_remaining || 0) > 0" class="alert py-2 px-3 mb-3 d-flex align-items-center gap-2"
+            style="background:rgba(201,169,110,.1);border:1px solid rgba(201,169,110,.3);font-size:.85rem;color:var(--gold);">
+            <i class="bi bi-stars"></i>
+            <span>Your first 2 sales are fee-free — <strong>{{ auth.user.free_sales_remaining }} left</strong></span>
+          </div>
+
+          <!-- ── Profile info ───────────────────────────────────── -->
+          <div v-if="activeTab === 'profile'" class="card p-4">
+            <h5 class="text-cream mb-4"><i class="bi bi-person me-2 text-gold"></i>Personal Information</h5>
+
+            <!-- Read-only account summary -->
+            <div class="row g-2 mb-4">
+              <div class="col-md-4">
+                <div style="background:var(--navy-light);border-radius:.7rem;padding:.7rem .9rem;">
+                  <div class="text-muted" style="font-size:.72rem;">National ID <i class="bi bi-lock-fill"></i></div>
+                  <div class="text-cream fw-600" style="font-size:.9rem;">{{ auth.user?.national_id || '—' }}</div>
                 </div>
               </div>
-              <button type="submit" class="btn btn-gold mt-4 px-4">Save Changes</button>
+              <div class="col-md-4">
+                <div style="background:var(--navy-light);border-radius:.7rem;padding:.7rem .9rem;">
+                  <div class="text-muted" style="font-size:.72rem;">Wallet balance</div>
+                  <div class="text-gold fw-700" style="font-size:.9rem;">EGP {{ Number(auth.user?.wallet_balance || 0).toLocaleString() }}</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div style="background:var(--navy-light);border-radius:.7rem;padding:.7rem .9rem;">
+                  <div class="text-muted" style="font-size:.72rem;">Member since</div>
+                  <div class="text-cream fw-600" style="font-size:.9rem;">{{ formatDate(auth.user?.created_at) || '—' }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="alert py-2 px-3 mb-3" style="background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.25);font-size:.88rem;" v-if="profileSuccess">
+              <i class="bi bi-check-circle me-2"></i>Profile updated successfully!
+            </div>
+
+            <form @submit.prevent="saveProfile" novalidate>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Full Name</label>
+                  <input class="form-control" v-model="profileForm.name" placeholder="Your full name" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Email <i class="bi bi-lock-fill text-muted" style="font-size:.72rem;"></i></label>
+                  <input class="form-control" type="email" :value="auth.user?.email" disabled readonly
+                    title="Your email cannot be changed" style="opacity:.7;cursor:not-allowed;" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Phone</label>
+                  <input class="form-control" type="tel" v-model="profileForm.phone" placeholder="01xxxxxxxxx" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">City</label>
+                  <input class="form-control" v-model="profileForm.city" placeholder="Cairo" />
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Address</label>
+                  <textarea class="form-control" v-model="profileForm.address" rows="2" placeholder="Street, district..."></textarea>
+                </div>
+              </div>
+
+              <hr class="divider-gold my-4" />
+              <h6 class="text-cream mb-3">Change Password</h6>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">New Password</label>
+                  <input class="form-control" type="password" v-model="profileForm.password" placeholder="Leave blank to keep current" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Confirm Password</label>
+                  <input class="form-control" type="password" v-model="profileForm.password_confirmation" placeholder="Repeat new password" />
+                </div>
+              </div>
+
+              <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-gold px-4" type="submit" :disabled="auth.loading">
+                  <span class="spinner-border spinner-border-sm me-2" v-if="auth.loading"></span>
+                  <i class="bi bi-check2 me-2" v-else></i>
+                  Save Changes
+                </button>
+              </div>
             </form>
           </div>
 
-          <!-- Orders Tab -->
-          <div v-if="activeTab === 'orders'" class="card profile-card p-4">
-            <h5 class="text-cream mb-4">My Orders</h5>
+          <!-- ── Orders ──────────────────────────────────────────── -->
+          <div v-if="activeTab === 'orders'">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="text-cream mb-0"><i class="bi bi-bag me-2 text-gold"></i>My Orders</h5>
+              <RouterLink class="btn btn-outline-gold btn-sm" to="/orders">View All</RouterLink>
+            </div>
             <LoadingSpinner v-if="ordersLoading" height="200px" />
-            <div v-else-if="orders.length === 0" class="text-center py-4 text-muted">No orders yet.</div>
-            <div v-else class="table-responsive">
-              <table class="table table-dark table-hover mb-0">
-                <thead><tr><th>Order ID</th><th>Date</th><th>Status</th><th>Total</th><th></th></tr></thead>
-                <tbody>
-                  <tr v-for="o in orders" :key="o.id">
-                    <td class="text-cream">#{{ o.id }}</td>
-                    <td class="text-muted">{{ formatDate(o.created_at) }}</td>
-                    <td><span class="badge" :class="statusBadge(o.status)">{{ o.status }}</span></td>
-                    <td class="text-cream">{{ formatPrice(o.total_amount) }}</td>
-                    <td><RouterLink :to="`/orders/${o.id}`" class="btn btn-sm btn-outline-gold">View</RouterLink></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-else-if="orders.length === 0" class="card p-5 text-center">
+              <i class="bi bi-bag-x text-muted" style="font-size:3rem;"></i>
+              <p class="text-muted mt-3 mb-3">No orders yet</p>
+              <RouterLink class="btn btn-gold btn-sm" to="/products">Start Shopping</RouterLink>
+            </div>
+            <div class="d-flex flex-column gap-3" v-else>
+              <div
+                class="card p-3 card-hover"
+                v-for="order in orders"
+                :key="order.order_id || order.id"
+                @click="$router.push({ name: 'OrderDetail', params: { id: order.order_id || order.id } })"
+                style="cursor:pointer;"
+              >
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                  <div>
+                    <div class="text-cream fw-600">#{{ order.order_id || order.id }} · {{ order.product?.name || 'Order' }}</div>
+                    <div class="text-muted" style="font-size:.82rem;">{{ formatDate(order.created_at) }}</div>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-gold fw-700">{{ formatPrice(order.total_price ?? order.total) }}</div>
+                    <span class="badge" :class="statusBadge(order.status)">{{ order.status }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Rentals Tab -->
-          <div v-if="activeTab === 'rentals'" class="card profile-card p-4">
-            <h5 class="text-cream mb-4">My Rentals</h5>
+          <!-- ── Offers ──────────────────────────────────────────── -->
+          <div v-if="activeTab === 'offers'">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="text-cream mb-0"><i class="bi bi-tag me-2 text-gold"></i>My Offers</h5>
+              <RouterLink class="btn btn-outline-gold btn-sm" to="/offers">View All</RouterLink>
+            </div>
+            <div class="card p-5 text-center">
+              <i class="bi bi-tag text-gold" style="font-size:2.5rem;"></i>
+              <p class="text-muted mt-3 mb-3">Offers you've made and offers received on your listings.</p>
+              <RouterLink class="btn btn-gold btn-sm" to="/offers">Open Offers</RouterLink>
+            </div>
+          </div>
+
+          <!-- ── Rentals ─────────────────────────────────────────── -->
+          <div v-if="activeTab === 'rentals'">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="text-cream mb-0"><i class="bi bi-clock-history me-2 text-gold"></i>My Rentals</h5>
+              <RouterLink class="btn btn-outline-gold btn-sm" to="/rentals">View All</RouterLink>
+            </div>
             <LoadingSpinner v-if="rentalsLoading" height="200px" />
-            <div v-else-if="rentals.length === 0" class="text-center py-4 text-muted">No active rentals.</div>
-            <div v-else class="table-responsive">
-              <table class="table table-dark table-hover mb-0">
-                <thead><tr><th>Item</th><th>Start Date</th><th>End Date</th><th>Status</th></tr></thead>
-                <tbody>
-                  <tr v-for="r in rentals" :key="r.id">
-                    <td class="text-cream">{{ r.product?.name || 'Item' }}</td>
-                    <td class="text-muted">{{ formatDate(r.start_date) }}</td>
-                    <td class="text-muted">{{ formatDate(r.end_date) }}</td>
-                    <td><span class="badge" :class="statusBadge(r.status)">{{ r.status }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-else-if="rentals.length === 0" class="card p-5 text-center">
+              <i class="bi bi-clock-history text-muted" style="font-size:3rem;"></i>
+              <p class="text-muted mt-3 mb-3">No rentals yet</p>
+              <RouterLink class="btn btn-gold btn-sm" to="/products?rentable=1">Browse Rentals</RouterLink>
+            </div>
+            <div class="d-flex flex-column gap-3" v-else>
+              <div class="card p-3" v-for="rental in rentals" :key="rental.id">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                  <div>
+                    <div class="text-cream fw-600">{{ rental.product?.name || 'Rental #' + rental.id }}</div>
+                    <div class="text-muted" style="font-size:.82rem;">
+                      <i class="bi bi-calendar me-1"></i>{{ rental.start_date }} → {{ rental.end_date }}
+                    </div>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-gold fw-700">{{ formatPrice(rental.total_price) }}</div>
+                    <span class="badge" :class="statusBadge(rental.status)">{{ rental.status }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Payments Tab -->
-          <div v-if="activeTab === 'payments'" class="card profile-card p-4">
-            <h5 class="text-cream mb-4">Payment History</h5>
+          <!-- ── Payments ────────────────────────────────────────── -->
+          <div v-if="activeTab === 'payments'">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="text-cream mb-0"><i class="bi bi-credit-card me-2 text-gold"></i>Payment History</h5>
+              <RouterLink class="btn btn-outline-gold btn-sm" to="/payments">View All</RouterLink>
+            </div>
             <LoadingSpinner v-if="paymentsLoading" height="200px" />
-            <div v-else-if="payments.length === 0" class="text-center py-4 text-muted">No payments found.</div>
-            <div v-else class="table-responsive">
-              <table class="table table-dark table-hover mb-0">
-                <thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead>
-                <tbody>
-                  <tr v-for="p in payments" :key="p.id">
-                    <td class="text-muted">{{ formatDate(p.created_at) }}</td>
-                    <td class="text-cream text-capitalize">{{ p.payment_method }}</td>
-                    <td class="text-cream">{{ formatPrice(p.amount) }}</td>
-                    <td><span class="badge" :class="statusBadge(p.status)">{{ p.status }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-else-if="payments.length === 0" class="card p-5 text-center">
+              <i class="bi bi-credit-card text-muted" style="font-size:3rem;"></i>
+              <p class="text-muted mt-3">No payments yet</p>
+            </div>
+            <div class="d-flex flex-column gap-3" v-else>
+              <div class="card p-3" v-for="payment in payments" :key="payment.id">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    <div class="text-cream fw-600">Payment #{{ payment.id }}</div>
+                    <div class="text-muted" style="font-size:.8rem;">
+                      <i class="bi bi-calendar me-1"></i>{{ formatDate(payment.created_at) }}
+                      <span class="ms-2"><i class="bi bi-credit-card me-1"></i>{{ payment.method || 'Cash' }}</span>
+                    </div>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-gold fw-700">{{ formatPrice(payment.amount) }}</div>
+                    <span class="badge" :class="payment.status === 'paid' ? 'bg-success' : 'bg-warning text-dark'">{{ payment.status }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Wishlist Tab -->
-          <div v-if="activeTab === 'wishlist'" class="card profile-card p-4">
-            <h5 class="text-cream mb-4">My Wishlist</h5>
+          <!-- ── Wishlist ────────────────────────────────────────── -->
+          <div v-if="activeTab === 'wishlist'">
+            <h5 class="text-cream mb-3"><i class="bi bi-heart me-2 text-gold"></i>My Wishlist</h5>
             <LoadingSpinner v-if="wishlistLoading" height="200px" />
-            <div v-else-if="wishlist.items.length === 0" class="text-center py-4 text-muted">Your wishlist is empty.</div>
-            <div v-else class="row g-3">
-              <div class="col-6 col-md-4" v-for="item in wishlist.items" :key="item.id">
+            <div v-else-if="wishlist.items.length === 0" class="card p-5 text-center">
+              <i class="bi bi-heart text-muted" style="font-size:3rem;"></i>
+              <p class="text-muted mt-3">Your wishlist is empty</p>
+            </div>
+            <div class="row g-3" v-else>
+              <div class="col-md-6" v-for="item in wishlist.items" :key="item.id">
                 <ProductCard :product="item.product || item" />
               </div>
             </div>
           </div>
 
-          <!-- Notifications Tab -->
-          <div v-if="activeTab === 'notifications'" class="card profile-card p-4">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-              <h5 class="text-cream mb-0">Notifications</h5>
-              <button class="btn btn-sm btn-outline-gold" @click="notificationStore.markAllRead()" v-if="notificationStore.hasUnread">Mark all as read</button>
+          <!-- ── Notifications ───────────────────────────────────── -->
+          <div v-if="activeTab === 'notifications'">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h5 class="text-cream mb-0"><i class="bi bi-bell me-2 text-gold"></i>Notifications</h5>
+              <button class="btn btn-outline-gold btn-sm" @click="notificationStore.markAllRead()" v-if="notificationStore.hasUnread">
+                Mark all read
+              </button>
             </div>
-            <div v-if="notificationStore.items.length === 0" class="text-center py-4 text-muted">No notifications.</div>
-            <div v-else class="d-flex flex-column gap-2">
-              <div v-for="n in notificationStore.items" :key="n.id" 
-                   class="p-3 rounded" 
-                   :class="n.read_at ? 'bg-transparent' : ''" 
-                   style="background: rgba(255,255,255,0.02); border: 1px solid var(--navy-border);"
-                   @click="notificationStore.markRead(n.id)">
-                <p class="text-cream mb-1" :class="{ 'fw-bold': !n.read_at }">{{ n.message || n.title }}</p>
-                <small class="text-muted">{{ formatDate(n.created_at) }}</small>
+            <LoadingSpinner v-if="notificationStore.loading" height="200px" />
+            <div v-else-if="notificationStore.items.length === 0" class="card p-5 text-center">
+              <i class="bi bi-bell-slash text-muted" style="font-size:3rem;"></i>
+              <p class="text-muted mt-3">No notifications</p>
+            </div>
+            <div class="d-flex flex-column gap-2" v-else>
+              <div
+                class="card p-3"
+                :class="{ 'border-gold-subtle': !n.read_at }"
+                v-for="n in notificationStore.items"
+                :key="n.id"
+                @click="notificationStore.markRead(n.id)"
+                style="cursor:pointer;transition:var(--transition);"
+              >
+                <div class="d-flex align-items-start gap-3">
+                  <div class="flex-shrink-0 d-flex align-items-center justify-content-center" style="width:40px;height:40px;border-radius:50%;background:rgba(201,169,110,.1);">
+                    <i class="bi bi-bell text-gold"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="text-cream fw-500" style="font-size:.88rem;">{{ n.data?.title || n.title || 'Notification' }}</div>
+                    <div class="text-muted" style="font-size:.8rem;">{{ n.data?.message || n.message }}</div>
+                    <div class="text-muted mt-1" style="font-size:.73rem;">{{ formatDate(n.created_at) }}</div>
+                  </div>
+                  <div v-if="!n.read_at" style="width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0;margin-top:6px;"></div>
+                </div>
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -175,6 +337,7 @@ import { userService, paymentService } from '@/services/api'
 import { useToast } from 'vue-toastification'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProductCard from '@/components/ui/ProductCard.vue'
+import TrustBadge from '@/components/ui/TrustBadge.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -195,8 +358,8 @@ const wishlistLoading = ref(false)
 const tabs = [
   { key: 'profile',       label: 'Profile',       icon: 'bi bi-person' },
   { key: 'orders',        label: 'Orders',        icon: 'bi bi-bag' },
+  { key: 'offers',        label: 'Offers',        icon: 'bi bi-tag' },
   { key: 'rentals',       label: 'Rentals',       icon: 'bi bi-clock-history' },
-  { key: 'payments',      label: 'Payments',      icon: 'bi bi-credit-card' },
   { key: 'wishlist',      label: 'Wishlist',      icon: 'bi bi-heart' },
   { key: 'notifications', label: 'Notifications', icon: 'bi bi-bell' },
 ]
@@ -206,25 +369,14 @@ const initials = computed(() =>
 )
 
 const profileForm = reactive({
-  name: '',
-  email: '',
-  phone: '',
-  city: '',
-  address: '',
+  name: auth.user?.name || '',
+  email: auth.user?.email || '',
+  phone: auth.user?.phone || '',
+  city: auth.user?.city || '',
+  address: auth.user?.address || '',
   password: '',
   password_confirmation: ''
 })
-
-// FIX: Watch auth.user and populate the form once the data arrives from the backend
-watch(() => auth.user, (newUser) => {
-  if (newUser) {
-    profileForm.name = newUser.name || ''
-    profileForm.email = newUser.email || ''
-    profileForm.phone = newUser.phone || ''
-    profileForm.city = newUser.city || ''
-    profileForm.address = newUser.address || ''
-  }
-}, { immediate: true })
 
 function formatPrice(v) { return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP' }).format(v || 0) }
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-EG', { year:'numeric', month:'short', day:'numeric' }) : '' }
@@ -234,9 +386,9 @@ function statusBadge(s) {
 }
 
 async function saveProfile() {
+  // Email is locked — never sent in the update.
   const payload = {
     name: profileForm.name,
-    email: profileForm.email,
     phone: profileForm.phone,
     city: profileForm.city,
     address: profileForm.address,
@@ -279,12 +431,3 @@ watch(activeTab, async tab => {
   }
 })
 </script>
-
-<style scoped>
-.profile-card { background: var(--navy-card); border: 1px solid var(--navy-border); border-radius: 1rem; }
-.avatar-circle { width: 60px; height: 60px; border-radius: 50%; background: var(--gold); color: var(--navy-bg); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; }
-.nav-pills .nav-link { color: var(--text-muted); background: transparent; border-radius: 0.5rem; }
-.nav-pills .nav-link:hover { color: var(--cream); background: rgba(255,255,255,0.05); }
-.nav-pills .nav-link.active { color: var(--navy-bg); background: var(--gold); font-weight: 600; }
-.table-dark { --bs-table-bg: transparent; --bs-table-border-color: var(--navy-border); }
-</style>

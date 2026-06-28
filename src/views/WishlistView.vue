@@ -15,8 +15,7 @@
       <div v-else>
         <div class="d-flex justify-content-between align-items-center mb-3">
           <span class="text-muted">{{ wishlist.count }} item{{ wishlist.count !== 1 ? 's' : '' }}</span>
-          <!-- FIX: Pass the wishlist item ID (i.wishlist_id || i.id), not the product ID -->
-          <button class="btn btn-sm text-danger p-0" @click="wishlist.items.forEach(i => wishlist.remove(i.wishlist_id || i.id))">
+          <button class="btn btn-sm text-danger p-0" @click="wishlist.items.forEach(i => wishlist.remove(i.product_id || i.id))">
             <i class="bi bi-trash me-1"></i>Clear All
           </button>
         </div>

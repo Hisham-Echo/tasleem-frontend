@@ -46,8 +46,8 @@
                   <i :class="typeIcon(n.type)"></i>
                 </div>
                 <div class="flex-grow-1 min-w-0">
-                  <p class="text-cream mb-0" style="font-size:.83rem;font-weight:500;line-height:1.3;">{{ n.data?.title || n.title || 'Notification' }}</p>
-                  <p class="text-muted mb-0 text-truncate" style="font-size:.76rem;">{{ n.data?.message || n.message }}</p>
+                  <p class="text-cream mb-0" style="font-size:.83rem;font-weight:500;line-height:1.3;">{{ n.title || n.data?.title || 'Notification' }}</p>
+                  <p class="text-muted mb-0" style="font-size:.76rem;line-height:1.35;">{{ n.body || n.message || n.data?.message }}</p>
                   <span class="text-muted" style="font-size:.7rem;">{{ timeAgo(n.created_at) }}</span>
                 </div>
                 <div v-if="!n.read_at" style="width:7px;height:7px;border-radius:50%;background:var(--gold);flex-shrink:0;margin-top:5px;"></div>
@@ -81,17 +81,42 @@ function toggle() { open.value = !open.value }
 function handleClick(n) {
   store.markRead(n.id)
   open.value = false
-  const url = n.data?.url || n.url
-  if (url) router.push(url)
+  router.push(routeFor(n) || '/profile')
 }
 
+// Build the destination from the notification's ref_type + ref_id.
+function routeFor(n) {
+  const t = (n.ref_type || n.data?.ref_type || '').toLowerCase()
+  const id = n.ref_id || n.data?.ref_id
+  if (t === 'order' && id) return `/orders/${id}`
+  if (t === 'offer') return '/offers'
+  if (t === 'rental') return '/rentals'
+  if (t === 'product' && id) return `/products/${id}`
+  // Fall back by notification type keyword.
+  const type = (n.type || '').toLowerCase()
+  if (type.includes('offer')) return '/offers'
+  if (type.includes('order') && id) return `/orders/${id}`
+  if (type.includes('boost') || type.includes('wallet')) return '/wallet'
+  return null
+}
+
+// Types arrive as 'order_placed', 'offer_received', etc. — match by keyword.
 function typeClass(type) {
-  const m = { order:'t-order', payment:'t-payment', review:'t-review', rental:'t-rental' }
-  return m[type] || 't-system'
+  const t = (type || '').toLowerCase()
+  if (t.includes('order')) return 't-order'
+  if (t.includes('pay') || t.includes('wallet')) return 't-payment'
+  if (t.includes('review')) return 't-review'
+  if (t.includes('rental') || t.includes('offer')) return 't-rental'
+  return 't-system'
 }
 function typeIcon(type) {
-  const m = { order:'bi bi-bag-check', payment:'bi bi-credit-card', review:'bi bi-star', rental:'bi bi-clock-history' }
-  return m[type] || 'bi bi-bell'
+  const t = (type || '').toLowerCase()
+  if (t.includes('order')) return 'bi bi-bag-check'
+  if (t.includes('pay') || t.includes('wallet')) return 'bi bi-credit-card'
+  if (t.includes('review')) return 'bi bi-star'
+  if (t.includes('offer')) return 'bi bi-tag'
+  if (t.includes('rental')) return 'bi bi-clock-history'
+  return 'bi bi-bell'
 }
 function timeAgo(d) {
   if (!d) return ''

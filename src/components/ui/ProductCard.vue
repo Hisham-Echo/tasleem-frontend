@@ -1,7 +1,13 @@
 <template>
   <div class="card product-card card-hover h-100" @click="goToProduct">
-    <!-- Badges -->
-    <span v-if="product.is_rentable" class="product-badge">Rentable</span>
+    <!-- Source badge: Tasleem store vs the seller's name -->
+    <span class="product-badge source-badge" :class="isTasleem ? 'src-tasleem' : 'src-user'">
+      <i :class="isTasleem ? 'bi bi-shop' : 'bi bi-person'"></i>{{ sellerLabel }}
+    </span>
+    <!-- Boosted ribbon -->
+    <span v-if="boosted" class="boosted-badge"><i class="bi bi-rocket-takeoff-fill"></i>Boosted</span>
+    <!-- Out of stock overlay -->
+    <span v-if="outOfStock" class="oos-badge">Out of Stock</span>
 
     <!-- Wishlist -->
     <button
@@ -33,13 +39,18 @@
       <!-- Name -->
       <h6 class="card-title text-cream mb-0 text-truncate" style="font-size:.95rem;">{{ product.name }}</h6>
 
-      <!-- ✅ FIX: Dynamic Rating and Reviews Count -->
-      <!-- Removed the hardcoded 4 stars and 0 reviews. Now it dynamically calculates based on the product data -->
-      <div class="d-flex align-items-center gap-1 star-rating">
+      <!-- Stock status -->
+      <span class="stock-tag" :class="outOfStock ? 'oos' : 'ins'">
+        <i :class="outOfStock ? 'bi bi-x-circle' : 'bi bi-check-circle'"></i>
+        {{ outOfStock ? 'Out of stock' : 'In stock' }}
+      </span>
+
+      <!-- Rating -->
+      <div class="d-flex align-items-center gap-1 star-rating" v-if="product.rating">
         <template v-for="n in 5" :key="n">
-          <i :class="n <= Math.round(displayRating) ? 'bi bi-star-fill filled' : 'bi bi-star empty'"></i>
+          <i :class="n <= Math.round(product.rating) ? 'bi bi-star-fill filled' : 'bi bi-star empty'"></i>
         </template>
-        <span class="text-muted ms-1" style="font-size:.78rem;">({{ displayReviewsCount }})</span>
+        <span class="text-muted ms-1" style="font-size:.78rem;">({{ product.reviews_count || 0 }})</span>
       </div>
 
       <!-- Price -->
@@ -48,7 +59,7 @@
           <span class="product-price">{{ formatPrice(product.price) }}</span>
           <span class="product-old-price ms-2" v-if="product.old_price">{{ formatPrice(product.old_price) }}</span>
         </div>
-        <button class="btn btn-gold btn-sm px-3" @click.stop="addToCart" :disabled="cartLoading">
+        <button class="btn btn-gold btn-sm px-3" @click.stop="addToCart" :disabled="cartLoading || outOfStock" :title="outOfStock ? 'Out of stock' : 'Add to cart'">
           <i class="bi bi-bag-plus" v-if="!cartLoading"></i>
           <span class="spinner-border spinner-border-sm" v-else></span>
         </button>
@@ -69,6 +80,7 @@ import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
+import { productImage as resolveImage, isBoosted } from '@/utils/helpers'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const router = useRouter()
@@ -78,42 +90,13 @@ const auth = useAuthStore()
 const toast = useToast()
 const cartLoading = ref(false)
 
-// ✅ FIX 1: Safely calculate the rating (0 to 5)
-// Handles the backend sending 'rate' as a string (e.g., "4.00") or 'rating' as a number
-const displayRating = computed(() => {
-  let r = props.product.rating
-  if (r === undefined || r === null || r === '') {
-    r = props.product.rate // Fallback to backend's 'rate' key
-  }
-  const num = parseFloat(r)
-  return isNaN(num) ? 0 : Math.max(0, Math.min(5, num)) // Clamp between 0 and 5
-})
-
-// ✅ FIX 2: Safely get the reviews count
-// Falls back to 'pay_count' if the backend doesn't provide 'reviews_count'
-const displayReviewsCount = computed(() => {
-  if (props.product.reviews_count !== undefined && props.product.reviews_count !== null) {
-    return props.product.reviews_count
-  }
-  if (props.product.pay_count !== undefined && props.product.pay_count !== null) {
-    return props.product.pay_count 
-  }
-  return 0
-})
-
-const productImage = computed(() => {
-  let url = props.product.image
-  if (!url && props.product.images && props.product.images.length > 0) {
-    const img = props.product.images[0]
-    url = img.image_url || img.url || (typeof img === 'string' ? img : null)
-  }
-  if (!url) return null
-  
-  if (url.startsWith('http://')) url = url.replace('http://', 'https://')
-  if (!url.startsWith('http')) url = `https://tasleembackendapifinal-production.up.railway.app/storage/${url}`
-  
-  return url
-})
+const productImage = computed(() => resolveImage(props.product))
+const isTasleem = computed(() => props.product.owner?.role === 'admin')
+const boosted = computed(() => isBoosted(props.product))
+const outOfStock = computed(() => props.product.status !== '1' || Number(props.product.quantity ?? 0) <= 0)
+// Tasleem store → "Tasleem"; a user listing → the seller's name (not generic "Seller").
+const sellerLabel = computed(() =>
+  isTasleem.value ? 'Tasleem' : (props.product.owner?.name?.split(' ')[0] || 'Seller'))
 
 function formatPrice(val) {
   return new Intl.NumberFormat('en-EG', { style: 'currency', currency: 'EGP' }).format(val || 0)
@@ -130,11 +113,7 @@ async function addToCart() {
     return
   }
   cartLoading.value = true
-  const res = await cart.addItem({
-    product_id: props.product.id,
-    quantity: 1,
-    item_type: 'purchase'
-  })
+  const res = await cart.addItem(props.product.id)
   if (res.success) {
     toast.success('Added to cart!')
     cart.openCart()
@@ -145,11 +124,6 @@ async function addToCart() {
 }
 
 async function toggleWishlist() {
-  if (!auth.isAuthenticated) {
-    toast.info('Please sign in to save items')
-    router.push({ name: 'Login' })
-    return
-  }
   const res = await wishlist.toggle(props.product.id)
   if (res?.needsAuth) {
     toast.info('Please sign in to save items')
@@ -163,70 +137,25 @@ async function toggleWishlist() {
 </script>
 
 <style scoped>
-.product-card {
-  background: var(--navy-card);
-  border: 1px solid var(--navy-border);
-  transition: all 0.3s ease;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
+.source-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .68rem; font-weight: 700; }
+.source-badge.src-tasleem { background: var(--gold); color: var(--navy); }
+.source-badge.src-user { background: rgba(52,152,219,.9); color: #fff; }
+.boosted-badge {
+  position: absolute; top: 10px; right: 44px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+  color: var(--navy); font-size: .64rem; font-weight: 800;
+  padding: 3px 8px; border-radius: 999px; box-shadow: 0 2px 8px rgba(201,169,110,.4);
 }
-.product-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--gold);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+.oos-badge {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-8deg); z-index: 3;
+  background: rgba(231,76,60,.92); color: #fff; font-size: .72rem; font-weight: 800;
+  padding: 4px 14px; border-radius: 6px; letter-spacing: .03em; box-shadow: 0 2px 10px rgba(0,0,0,.35);
 }
-.product-img-wrap {
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--navy-bg);
-  overflow: hidden;
+.stock-tag {
+  display: inline-flex; align-items: center; gap: 4px; width: fit-content;
+  font-size: .68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px;
 }
-.product-img-wrap img {
-  max-height: 100%;
-  max-width: 100%;
-  object-fit: contain;
-}
-.no-img {
-  font-size: 3rem;
-  color: var(--navy-border);
-}
-.product-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 10;
-  background: var(--gold);
-  color: var(--navy-bg);
-  font-size: 0.7rem;
-  font-weight: bold;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-}
-.wishlist-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 10;
-  background: rgba(0,0,0,0.5);
-  border: none;
-  color: white;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-.wishlist-btn.active, .wishlist-btn:hover {
-  background: var(--gold);
-  color: var(--navy-bg);
-}
-.star-rating .filled { color: var(--gold); }
-.star-rating .empty { color: var(--navy-border); }
-.product-price { color: var(--gold); font-weight: bold; font-size: 1.1rem; }
-.product-old-price { color: var(--text-muted); text-decoration: line-through; font-size: 0.85rem; }
+.stock-tag.ins { background: rgba(46,204,113,.14); color: #2ecc71; }
+.stock-tag.oos { background: rgba(231,76,60,.14); color: #e74c3c; }
 </style>

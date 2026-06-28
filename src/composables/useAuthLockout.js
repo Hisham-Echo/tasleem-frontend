@@ -5,8 +5,8 @@ export function useAuthLockout(maxAttempts = 3, lockoutSeconds = 60) {
   const failedAttempts = ref(0);
   const isLockedOut = ref(false);
   const countdown = ref(0);
+  
   let timerInterval = null;
-
   const STORAGE_KEY = 'tasleem_auth_lockout_time';
 
   // Function to clear the lockout state
@@ -15,20 +15,18 @@ export function useAuthLockout(maxAttempts = 3, lockoutSeconds = 60) {
     countdown.value = 0;
     failedAttempts.value = 0;
     localStorage.removeItem(STORAGE_KEY);
+    
     if (timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
     }
   };
 
-  // Function to start the lockout countdown
+  // Function to start the 60s countdown
   const startLockout = () => {
-    // FIX: Clear existing interval to prevent memory leaks and multiple concurrent timers
-    if (timerInterval) clearInterval(timerInterval); 
-    
     isLockedOut.value = true;
     countdown.value = lockoutSeconds;
-
+    
     // Save the exact end time to localStorage
     const lockoutEndTime = Date.now() + (lockoutSeconds * 1000);
     localStorage.setItem(STORAGE_KEY, lockoutEndTime.toString());
@@ -61,12 +59,12 @@ export function useAuthLockout(maxAttempts = 3, lockoutSeconds = 60) {
     if (lockoutEndStr) {
       const lockoutEndTime = parseInt(lockoutEndStr, 10);
       const now = Date.now();
-
+      
       if (now < lockoutEndTime) {
         isLockedOut.value = true;
         failedAttempts.value = maxAttempts;
         countdown.value = Math.ceil((lockoutEndTime - now) / 1000);
-
+        
         timerInterval = setInterval(() => {
           countdown.value--;
           if (countdown.value <= 0) {

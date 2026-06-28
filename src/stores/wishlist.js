@@ -1,80 +1,94 @@
 import { defineStore } from 'pinia'
-import { wishlistService } from '@/services/api'
+import { ref, computed } from 'vue'
+import { wishlistService, productService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { unwrapList } from '@/utils/helpers'
 
-export const useWishlistStore = defineStore('wishlist', {
-  state: () => ({
-    items: [],
-    loading: false
-  }),
-  
-  getters: {
-    isInWishlist: (state) => (productId) => {
-      return state.items.some(item => item.product_id === productId)
-    },
-    count: (state) => state.items.length // FIX 1: Added missing count getter
-  },
-  
-  actions: {
-    async fetchWishlist() {
-      const auth = useAuthStore()
-      if (!auth.user?.id) return
-      try {
-        const res = await wishlistService.getAll({ user_id: auth.user.id })
-        this.items = res.data?.data || []
-      } catch (error) {
-        console.error('Fetch wishlist error:', error)
-        this.items = []
-      }
-    },
-    
-    async toggle(productId) {
-      const auth = useAuthStore()
-      if (!auth.user?.id) return { needsAuth: true }
-      
-      try {
-        const checkRes = await wishlistService.check({ 
-          user_id: auth.user.id, 
-          product_id: productId 
-        })
-        const exists = checkRes.data?.data?.exists || checkRes.data?.exists
-        
-        if (exists) {
-          const allRes = await wishlistService.getAll({ user_id: auth.user.id })
-          const items = allRes.data?.data || []
-          const item = items.find(i => i.product_id === productId)
-          if (item) {
-            await wishlistService.remove(item.wishlist_id || item.id)
-          }
-          await this.fetchWishlist()
-          return { success: true, added: false }
-        } else {
-          await wishlistService.add({ 
-            user_id: auth.user.id, 
-            product_id: productId 
+export const useWishlistStore = defineStore('wishlist', () => {
+  const items   = ref([])
+  const loading = ref(false)
+
+  // Map of product_id → wishlist row id (the API uses `wishlist_id`, nested product)
+  const itemMap = computed(() => {
+    const m = {}
+    items.value.forEach(i => { m[i.product?.id ?? i.product_id] = i.wishlist_id ?? i.id })
+    return m
+  })
+
+  const ids   = computed(() => Object.keys(itemMap.value).map(Number))
+  const count = computed(() => items.value.length)
+
+  function isInWishlist(productId) {
+    return ids.value.includes(Number(productId))
+  }
+
+  async function fetchWishlist() {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) { items.value = []; return }
+    try {
+      const res = await wishlistService.getAll({ user_id: auth.user?.id, per_page: 100 })
+      const rows = res.data?.data || res.data || []
+      // Wishlist's nested product omits images — hydrate them in one batched request.
+      const ids = [...new Set(rows.map(r => r.product?.id ?? r.product_id).filter(Boolean))]
+      if (ids.length) {
+        try {
+          const pr = await productService.getAll({ ids: ids.join(','), per_page: ids.length })
+          const byId = {}
+          unwrapList(pr).forEach(p => { byId[p.id] = p })
+          rows.forEach(r => {
+            const full = byId[r.product?.id ?? r.product_id]
+            if (full) r.product = full
           })
-          await this.fetchWishlist()
-          return { success: true, added: true }
-        }
-      } catch (error) {
-        if (error.response?.status === 401 || error.response?.status === 403) return { needsAuth: true }
-        return { 
-          success: false, 
-          message: error.response?.data?.message || 'Failed to update wishlist'
-        }
+        } catch (_) { /* keep as-is */ }
       }
-    },
-
-    // FIX 2: Added missing remove action
-    async remove(itemId) {
-      try {
-        await wishlistService.remove(itemId)
-        // Optimistically update UI
-        this.items = this.items.filter(i => (i.wishlist_id || i.id) !== itemId)
-        return { success: true }
-      } catch (error) {
-        return { success: false, message: error.response?.data?.message || 'Failed to remove from wishlist' }
-      }
+      items.value = rows
+    } catch (_) {
+      items.value = []
     }
   }
+
+  async function toggle(productId) {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) return { needsAuth: true }
+    loading.value = true
+    try {
+      if (isInWishlist(productId)) {
+        const wishlistItemId = itemMap.value[productId]
+        await wishlistService.remove(wishlistItemId)
+        items.value = items.value.filter(i => (i.wishlist_id ?? i.id) !== wishlistItemId)
+        return { added: false }
+      } else {
+        // Backend requires user_id.
+        await wishlistService.add({ user_id: auth.user.id, product_id: productId })
+        await fetchWishlist()
+        return { added: true }
+      }
+    } catch (err) {
+      return { error: err.response?.data?.message }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function remove(productId) {
+    const wishlistItemId = itemMap.value[productId]
+    if (!wishlistItemId) return
+    try {
+      await wishlistService.remove(wishlistItemId)
+      items.value = items.value.filter(i => i.id !== wishlistItemId)
+    } catch (_) {}
+  }
+
+  async function clearAll() {
+    const auth = useAuthStore()
+    try {
+      // ✅ Fixed: backend needs DELETE /wishlist/clear/{userId}
+      await wishlistService.clear(auth.user?.id)
+      items.value = []
+    } catch (_) {
+      items.value = []
+    }
+  }
+
+  return { items, loading, ids, count, isInWishlist, fetchWishlist, toggle, remove, clearAll }
 })

@@ -62,6 +62,9 @@
                   </div>
                 </RouterLink>
               </div>
+              <button class="btn btn-gold btn-sm w-100 mt-2" style="font-size:.78rem;" @click="goToSearch" v-if="aiQuery.trim()">
+                <i class="bi bi-search me-1"></i>See all results for "{{ aiQuery.trim() }}"
+              </button>
               <button class="btn btn-link text-muted p-0 mt-2" style="font-size:.73rem;" @click="showResults = false; aiQuery = ''">
                 <i class="bi bi-x me-1"></i>Clear
               </button>
@@ -75,9 +78,6 @@
           </li>
           <li class="nav-item">
             <RouterLink class="nav-link" to="/categories">Categories</RouterLink>
-          </li>
-          <li class="nav-item">
-            <RouterLink class="nav-link" to="/rentals" v-if="auth.isAuthenticated">Rentals</RouterLink>
           </li>
 
           <!-- Guest buttons -->
@@ -142,16 +142,20 @@
                 <li><RouterLink class="dropdown-item" to="/profile"><i class="bi bi-person me-2"></i>My Profile</RouterLink></li>
                 <li><RouterLink class="dropdown-item" to="/orders"><i class="bi bi-bag-check me-2"></i>My Orders</RouterLink></li>
                 <li><RouterLink class="dropdown-item" to="/rentals"><i class="bi bi-clock-history me-2"></i>My Rentals</RouterLink></li>
-                <li><RouterLink class="dropdown-item" to="/payments"><i class="bi bi-credit-card me-2"></i>Payments</RouterLink></li>
+                <li><RouterLink class="dropdown-item" to="/wallet"><i class="bi bi-wallet2 me-2"></i>My Wallet</RouterLink></li>
+                <li><RouterLink class="dropdown-item" to="/offers"><i class="bi bi-tag me-2"></i>Offers</RouterLink></li>
                 <li><RouterLink class="dropdown-item" to="/wishlist"><i class="bi bi-heart me-2"></i>Wishlist</RouterLink></li>
                 <template v-if="auth.isSeller">
                   <li><hr class="dropdown-divider m-1" style="border-color:var(--navy-border);" /></li>
                   <li><RouterLink class="dropdown-item text-gold" to="/seller"><i class="bi bi-shop me-2"></i>Seller Dashboard</RouterLink></li>
+                  <li><RouterLink class="dropdown-item" to="/seller/sales"><i class="bi bi-graph-up-arrow me-2"></i>My Sales</RouterLink></li>
                   <li><RouterLink class="dropdown-item" to="/seller/products/new"><i class="bi bi-plus-circle me-2"></i>List a Product</RouterLink></li>
                 </template>
                 <template v-if="auth.isAdmin">
                   <li><hr class="dropdown-divider m-1" style="border-color:var(--navy-border);" /></li>
                   <li><RouterLink class="dropdown-item" to="/admin"><i class="bi bi-shield-check me-2"></i>Admin Panel</RouterLink></li>
+                  <li><RouterLink class="dropdown-item" to="/admin/products"><i class="bi bi-box-seam me-2"></i>Manage Products</RouterLink></li>
+                  <li><RouterLink class="dropdown-item" to="/admin/orders"><i class="bi bi-bag-check me-2"></i>Manage Orders</RouterLink></li>
                   <li><RouterLink class="dropdown-item" to="/admin/users"><i class="bi bi-people me-2"></i>Manage Users</RouterLink></li>
                   <li><RouterLink class="dropdown-item" to="/admin/logs"><i class="bi bi-journal-code me-2"></i>Activity Logs</RouterLink></li>
                 </template>
@@ -177,7 +181,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useToast } from 'vue-toastification'
-import { aiService } from '@/services/api'
+import { aiSearch } from '@/services/ai'
+import { productImage } from '@/utils/helpers'
 import NotificationBell from '@/components/ui/NotificationBell.vue'
 
 const router = useRouter()
@@ -208,22 +213,40 @@ function formatPrice(v) {
 }
 
 async function askAssistant() {
-  if (!aiQuery.value.trim() || assistantLoading.value) return
+  const q = aiQuery.value.trim()
+  if (!q || assistantLoading.value) return
   assistantLoading.value = true
   assistantAnswer.value = ''
   assistantProducts.value = []
   showResults.value = false
   try {
-    const res = await aiService.assistant(aiQuery.value.trim())
-    assistantAnswer.value = res.data?.answer || ''
-    assistantProducts.value = res.data?.products || []
+    // AI semantic search → ranked products (hydrated from the catalogue).
+    const products = await aiSearch(q, 8)
+    if (products && products.length) {
+      assistantProducts.value = products.map(p => ({
+        id: p.id, name: p.name, price: p.price, image: productImage(p),
+      }))
+      assistantAnswer.value = `Found ${products.length} match${products.length > 1 ? 'es' : ''} for "${q}"`
+    } else {
+      // AI returned nothing / unavailable → let the user open full results.
+      assistantAnswer.value = `No quick matches — press “See all results” to search “${q}”.`
+    }
     showResults.value = true
   } catch (_) {
-    assistantAnswer.value = 'AI assistant is temporarily unavailable.'
+    assistantAnswer.value = 'AI search is temporarily unavailable.'
     showResults.value = true
   } finally {
     assistantLoading.value = false
   }
+}
+
+// Enter / send button shows the quick AI dropdown; this opens the full
+// results on the Products page (AI-ranked).
+function goToSearch() {
+  const q = aiQuery.value.trim()
+  if (!q) return
+  showResults.value = false
+  router.push({ path: '/products', query: { search: q } })
 }
 
 function handleOutsideClick(e) {
