@@ -174,7 +174,7 @@ watch(() => auth.isAuthenticated, () => loadRecommendations())
 .hero-dots span.active { background: var(--gold); width: 22px; border-radius: 4px; }
 @media (max-width: 768px) { .hero-card { flex-direction: column; padding: 1.5rem; } .hero-media { width: 100%; flex-basis: auto; } .hero-name { font-size: 1.5rem; } }
 
-.cat-row { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem; scrollbar-width: thin; }
+.cat-row { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem; }
 .cat-chip { display: inline-flex; align-items: center; gap: .5rem; flex-shrink: 0; min-width: max-content;
   background: var(--navy-light); border: 1px solid var(--navy-border); border-radius: 999px; padding: .6rem 1.2rem;
   color: var(--text-cream); font-weight: 600; font-size: .9rem; text-decoration: none; transition: .15s; }
