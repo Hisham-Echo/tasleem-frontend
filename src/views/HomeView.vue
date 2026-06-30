@@ -66,11 +66,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { productService, categoryService } from '@/services/api'
-<<<<<<< HEAD
 import { aiTrending, aiExplore, aiRecommend, aiSimilar } from '@/services/ai'
-=======
-import { aiTrending, aiExplore, aiRecommend } from '@/services/ai'
->>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
 import { unwrapList, productImage, hideMine, boostedFirst, formatPrice } from '@/utils/helpers'
 import ProductRow from '@/components/ui/ProductRow.vue'
 
@@ -124,7 +120,6 @@ async function loadRecommendations() {
   recLoading.value = true
   try {
     const uid = meId.value
-<<<<<<< HEAD
     const last = localStorage.getItem('tasleem_last_product') || null
     if (uid) {
       const ai = await aiRecommend(uid, 8, last)
@@ -133,11 +128,6 @@ async function loadRecommendations() {
       // Anonymous visitor who has viewed a product → show items based on that view.
       const sim = await aiSimilar(last, 8)
       if (sim && sim.length) { recommendations.value = mine(sim); recSection.value = 'Based on your last view'; return }
-=======
-    if (uid) {
-      const ai = await aiRecommend(uid, 8)
-      if (ai && ai.products.length) { recommendations.value = mine(ai.products); recSection.value = ai.section; return }
->>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
     }
     const fb = await productService.getAll({ sort_by: 'view_count', sort_order: 'desc', per_page: 12 })
     recommendations.value = mine(unwrapList(fb)).slice(0, 8)
@@ -189,11 +179,7 @@ watch(() => auth.isAuthenticated, () => loadRecommendations())
 .hero-dots span.active { background: var(--gold); width: 22px; border-radius: 4px; }
 @media (max-width: 768px) { .hero-card { flex-direction: column; padding: 1.5rem; } .hero-media { width: 100%; flex-basis: auto; } .hero-name { font-size: 1.5rem; } }
 
-<<<<<<< HEAD
 .cat-row { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem; scrollbar-width: thin; }
-=======
-.cat-row { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem; }
->>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
 .cat-chip { display: inline-flex; align-items: center; gap: .5rem; flex-shrink: 0; min-width: max-content;
   background: var(--navy-light); border: 1px solid var(--navy-border); border-radius: 999px; padding: .6rem 1.2rem;
   color: var(--text-cream); font-weight: 600; font-size: .9rem; text-decoration: none; transition: .15s; }

@@ -34,15 +34,9 @@ export async function aiExplore(k = 8) {
   return null
 }
 
-<<<<<<< HEAD
 export async function aiRecommend(userId, k = 8, lastProductId = null) {
   try {
     const r = await aiService.recommend(userId, k, lastProductId)
-=======
-export async function aiRecommend(userId, k = 8) {
-  try {
-    const r = await aiService.recommend(userId, k)
->>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
     const p = await hydrate(r.data?.ids)
     if (p.length) return { products: p, section: r.data?.section || 'Recommended for You' }
   } catch { /* unavailable */ }
