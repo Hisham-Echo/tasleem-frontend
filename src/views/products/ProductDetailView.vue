@@ -312,7 +312,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+<<<<<<< HEAD
 import { productService, aiService, imageService, reviewService, boostService, rentalService } from '@/services/api'
+=======
+import { productService, aiService, imageService, reviewService, boostService } from '@/services/api'
+>>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
@@ -386,6 +390,65 @@ const isRentable = computed(() => {
 const isForSale = computed(() => {
   const t = product.value?.type
   return t === 'sale' || t === 'both' || t === undefined
+<<<<<<< HEAD
+=======
+})
+
+// C2C vs Tasleem store, and ownership.
+const isTasleem = computed(() => product.value?.owner?.role === 'admin')
+const isOwner   = computed(() => product.value?.owner?.id && product.value.owner.id === auth.user?.id)
+// Make Offer: only a logged-in non-owner, on a C2C item that's for sale.
+const canOffer  = computed(() => auth.isAuthenticated && !isOwner.value && !isTasleem.value && isForSale.value)
+// An accepted offer becomes an order, so phone + address are required up front.
+const hasAddress = computed(() => (auth.user?.address || '').trim().length > 0)
+const hasPhone   = computed(() => (auth.user?.phone || '').trim().length > 0)
+const canOrder   = computed(() => hasAddress.value && hasPhone.value)
+
+// ── Make Offer ──
+const showOffer = ref(false)
+const offerAmount = ref(0)
+const offerMethod = ref('cash') // COD by default so the seller's accept never fails on funds
+const offerLoading = ref(false)
+
+function openOffer() {
+  if (!auth.isAuthenticated) { toast.info('Please sign in'); router.push({ name: 'Login' }); return }
+  offerAmount.value = Math.round((product.value?.price || 0) * 0.9)
+  walletStore.fetch()
+  showOffer.value = true
+}
+async function submitOffer() {
+  const amt = Number(offerAmount.value)
+  if (!(amt > 0)) { toast.error('Enter a valid amount'); return }
+  if (offerMethod.value === 'wallet' && walletStore.balance < amt + 30) {
+    toast.error('Not enough wallet balance — top up or choose Cash on Delivery'); return
+  }
+  offerLoading.value = true
+  try {
+    await offers.make({ product_id: product.value.id, amount: amt, payment_method: offerMethod.value })
+    toast.success('Offer sent to the seller')
+    showOffer.value = false
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Could not send offer')
+  } finally { offerLoading.value = false }
+}
+
+// ── Boost (owner, C2C only) ──
+const boostLoading = ref(false)
+async function boostListing() {
+  boostLoading.value = true
+  try {
+    await boostService.boost(product.value.id, 3)
+    toast.success('Listing boosted for 3 days')
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Could not boost listing')
+  } finally { boostLoading.value = false }
+}
+
+const rentalDays = computed(() => {
+  if (!rental.value.start_date || !rental.value.end_date) return 0
+  const ms = new Date(rental.value.end_date) - new Date(rental.value.start_date)
+  return Math.max(Math.ceil(ms / 86400000), 0)
+>>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
 })
 
 // C2C vs Tasleem store, and ownership.
@@ -574,11 +637,14 @@ async function loadProduct() {
       imageService.getAll(route.params.id).catch(() => ({ data: [] }))
     ])
     product.value = prodRes.data?.data || prodRes.data
+<<<<<<< HEAD
     // Remember the last product the user viewed, so the home page can show
     // "Based on your last view" recommendations.
     if (product.value?.id) {
       try { localStorage.setItem('tasleem_last_product', String(product.value.id)) } catch (_) {}
     }
+=======
+>>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
     // Normalise images to plain URL strings (backend exposes `image_url`).
     const rawImgs = imgRes.data?.data || imgRes.data || product.value?.images || []
     images.value = (Array.isArray(rawImgs) ? rawImgs : [])

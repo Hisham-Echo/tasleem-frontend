@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useToast } from 'vue-toastification'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL /* || 'http://127.0.0.1:8000/api/v1' */,
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://tasleembackendapifinal-production.up.railway.app/api/v1/',
   headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
   timeout: 15000,
 })
@@ -320,8 +320,12 @@ export const aiService = {
   trending:   (k = 8)               => aiGet('/trending', { k }),
   explore:    (k = 8)               => aiGet('/explore', { k }),
   similar:    (productId, k = 8)    => aiGet(`/similar/${productId}`, { k }),
+<<<<<<< HEAD
   recommend:  (userId, k = 8, lastProductId = null) =>
                 aiGet(`/recommend/user/${userId}`, lastProductId ? { k, last_product_id: lastProductId } : { k }),
+=======
+  recommend:  (userId, k = 8)       => aiGet(`/recommend/user/${userId}`, { k }),
+>>>>>>> dc57b730be709935474cb3ce5855fbc601359ae3
   bundle:     (productId, k = 4)    => aiGet(`/bundle/${productId}`, { k }),
   search:     (q, k = 30)           => aiGet('/search', { q, k }),
   assistant:  (query, k = 8)        => aiGet('/search', { q: query, k }),
