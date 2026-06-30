@@ -59,7 +59,7 @@
               <tr v-for="product in filteredProducts" :key="product.id">
                 <td>
                   <div style="width:44px;height:44px;border-radius:.5rem;overflow:hidden;background:var(--navy-light);">
-                    <img :src="product.image" style="width:100%;height:100%;object-fit:cover;" v-if="product.image" />
+                    <img :src="pimg(product)" style="width:100%;height:100%;object-fit:cover;" v-if="pimg(product)" />
                     <div class="d-flex align-items-center justify-content-center h-100" v-else><i class="bi bi-image text-muted" style="font-size:.8rem;"></i></div>
                   </div>
                 </td>
@@ -68,24 +68,38 @@
                   <div class="text-muted" style="font-size:.75rem;">#{{ product.id }}</div>
                 </td>
                 <td><span class="badge badge-gold">{{ product.category?.name || '—' }}</span></td>
-                <td class="text-gold fw-600">{{ formatPrice(product.price) }}</td>
                 <td>
-                  <span :class="product.stock > 0 ? 'text-success' : 'text-danger'" style="font-weight:500;">{{ product.stock }}</span>
+                  <div v-if="editingId === product.id" class="d-flex align-items-center gap-1">
+                    <input v-model.number="editPrice" type="number" min="0" step="1" class="form-control form-control-sm" style="width:90px;" @keyup.enter="savePrice(product)" />
+                    <button class="btn btn-sm btn-gold px-2 py-1" @click="savePrice(product)" :disabled="savingId === product.id" title="Save">
+                      <span v-if="savingId === product.id" class="spinner-border spinner-border-sm" style="width:10px;height:10px;"></span>
+                      <i v-else class="bi bi-check-lg"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-gold px-2 py-1" @click="editingId = null" title="Cancel"><i class="bi bi-x"></i></button>
+                  </div>
+                  <button v-else class="btn btn-sm p-0 text-gold fw-600 d-inline-flex align-items-center gap-1" @click="startEdit(product)" title="Click to edit price">
+                    {{ formatPrice(product.price) }}<i class="bi bi-pencil" style="font-size:.7rem;opacity:.6;"></i>
+                  </button>
                 </td>
                 <td>
-                  <i class="bi" :class="product.is_rentable ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-muted'"></i>
+                  <span :class="stockOf(product) > 0 ? 'text-success' : 'text-danger'" style="font-weight:500;">{{ stockOf(product) }}</span>
                 </td>
                 <td>
-                  <span class="badge" :class="product.stock > 0 ? 'bg-success' : 'bg-warning text-dark'">{{ product.stock > 0 ? 'Active' : 'Out of Stock' }}</span>
+                  <i class="bi" :class="isRentable(product) ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-muted'"></i>
+                </td>
+                <td>
+                  <span class="badge" :class="stockOf(product) > 0 ? 'bg-success' : 'bg-warning text-dark'">{{ stockOf(product) > 0 ? 'Active' : 'Out of Stock' }}</span>
+                  <span v-if="isBoosted(product)" class="badge badge-gold ms-1" title="Boosted"><i class="bi bi-rocket-takeoff-fill"></i></span>
                 </td>
                 <td>
                   <div class="d-flex gap-1">
                     <RouterLink :to="`/products/${product.id}`" class="btn btn-sm btn-outline-gold px-2 py-1" title="View">
                       <i class="bi bi-eye"></i>
                     </RouterLink>
-                    <RouterLink :to="`/seller/products/${product.id}/edit`" class="btn btn-sm btn-outline-gold px-2 py-1" title="Edit">
-                      <i class="bi bi-pencil"></i>
-                    </RouterLink>
+                    <button class="btn btn-sm px-2 py-1" :class="isBoosted(product) ? 'btn-gold' : 'btn-outline-gold'"
+                      :title="isBoosted(product) ? 'Boosted' : 'Boost listing'" @click="openBoost(product)">
+                      <i class="bi bi-rocket-takeoff" style="font-size:.72rem;"></i>
+                    </button>
                     <button class="btn btn-sm px-2 py-1" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);color:#e74c3c;" @click="deleteProduct(product)" title="Delete">
                       <i class="bi bi-trash"></i>
                     </button>
@@ -98,13 +112,53 @@
         <Pagination v-if="totalPages > 1" :current-page="currentPage" :total-pages="totalPages" @change="fetchProducts" class="p-3" />
       </div>
     </div>
+
+    <!-- Boost modal -->
+    <Transition name="fade">
+      <div v-if="boostProduct" class="boost-overlay" @click.self="boostProduct = null">
+        <div class="card p-4" style="max-width:400px;width:100%;border-radius:1.25rem;">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-rocket-takeoff-fill text-gold fs-5"></i>
+            <h5 class="text-cream mb-0">Boost Listing</h5>
+          </div>
+          <p class="text-muted mb-3" style="font-size:.84rem;">Show <strong class="text-cream">{{ boostProduct.name }}</strong> at the top of feeds and search.</p>
+
+          <label class="form-label">Duration</label>
+          <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
+            <button class="btn btn-outline-gold rounded-circle" style="width:42px;height:42px;" @click="boostDays = Math.max(1, boostDays - 1)"><i class="bi bi-dash-lg"></i></button>
+            <div class="text-center" style="min-width:90px;">
+              <div class="text-gold fw-800" style="font-size:2rem;line-height:1;">{{ boostDays }}</div>
+              <div class="text-muted" style="font-size:.78rem;">day{{ boostDays > 1 ? 's' : '' }}</div>
+            </div>
+            <button class="btn btn-outline-gold rounded-circle" style="width:42px;height:42px;" @click="boostDays = Math.min(30, boostDays + 1)"><i class="bi bi-plus-lg"></i></button>
+          </div>
+
+          <div class="d-flex justify-content-between mb-1"><span class="text-muted">Cost ({{ boostDays }} × EGP 20)</span><span class="text-gold fw-700">EGP {{ boostDays * 20 }}</span></div>
+          <div class="d-flex justify-content-between mb-3"><span class="text-muted">Wallet balance</span><span class="text-cream">EGP {{ Number(auth.user?.wallet_balance || 0).toLocaleString() }}</span></div>
+
+          <div class="alert py-2 px-3 mb-3" v-if="(boostDays * 20) > Number(auth.user?.wallet_balance || 0)" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);font-size:.82rem;color:#e74c3c;">
+            <i class="bi bi-exclamation-circle me-1"></i>Not enough wallet balance. Top up first.
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-gold w-100" @click="confirmBoost"
+              :disabled="boostBusy || (boostDays * 20) > Number(auth.user?.wallet_balance || 0)">
+              <span class="spinner-border spinner-border-sm me-2" v-if="boostBusy"></span>
+              <i class="bi bi-rocket-takeoff me-1" v-else></i>Boost for EGP {{ boostDays * 20 }}
+            </button>
+            <button class="btn btn-outline-gold" @click="boostProduct = null">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { userService, productService } from '@/services/api'
+import { userService, productService, boostService } from '@/services/api'
+import { productImage, isBoosted } from '@/utils/helpers'
 import { useToast } from 'vue-toastification'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import Pagination from '@/components/ui/Pagination.vue'
@@ -116,6 +170,60 @@ const loading = ref(true)
 const search = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
+const editingId = ref(null)   // product whose price is being edited inline
+const editPrice = ref(0)
+const savingId = ref(null)
+
+// Real API field names (the resource uses quantity/images/type, not stock/image/is_rentable).
+const pimg = p => productImage(p)
+const stockOf = p => Number(p.quantity ?? 0)
+const isRentable = p => p.type === 'rental' || p.type === 'both'
+
+function startEdit(product) {
+  editingId.value = product.id
+  editPrice.value = Number(product.price) || 0
+}
+
+async function savePrice(product) {
+  const price = Number(editPrice.value)
+  if (!(price >= 0)) { toast.error('Enter a valid price'); return }
+  savingId.value = product.id
+  try {
+    // Backend product update requires status alongside the changed field.
+    await productService.updateFields(product.id, { price, status: product.status ?? '1' })
+    product.price = price
+    editingId.value = null
+    toast.success('Price updated')
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Failed to update price')
+  } finally { savingId.value = null }
+}
+
+// Boost a listing — in-page modal with a day stepper + EGP 20/day from wallet.
+const boostProduct = ref(null)
+const boostDays = ref(3)
+const boostBusy = ref(false)
+
+function openBoost(product) {
+  if (isBoosted(product)) { toast.info('This listing is already boosted'); return }
+  boostProduct.value = product
+  boostDays.value = 3
+}
+
+async function confirmBoost() {
+  const product = boostProduct.value
+  if (!product) return
+  boostBusy.value = true
+  try {
+    await boostService.boost(product.id, boostDays.value)
+    product.is_boosted = true
+    toast.success(`Boosted for ${boostDays.value} day${boostDays.value > 1 ? 's' : ''} — EGP ${boostDays.value * 20} from your wallet`)
+    await auth.fetchMe()  // refresh wallet balance
+    boostProduct.value = null
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Boost failed — check your wallet balance')
+  } finally { boostBusy.value = false }
+}
 
 const statsData = ref({ total: 0, active: 0, rentable: 0, outOfStock: 0 })
 const stats = computed(() => [
@@ -142,9 +250,9 @@ async function fetchProducts(page = 1) {
     currentPage.value = page
     statsData.value = {
       total: products.value.length,
-      active: products.value.filter(p => p.stock > 0).length,
-      rentable: products.value.filter(p => p.is_rentable).length,
-      outOfStock: products.value.filter(p => !p.stock || p.stock <= 0).length
+      active: products.value.filter(p => stockOf(p) > 0).length,
+      rentable: products.value.filter(p => isRentable(p)).length,
+      outOfStock: products.value.filter(p => stockOf(p) <= 0).length
     }
   } catch (_) { products.value = [] } finally { loading.value = false }
 }
@@ -163,3 +271,10 @@ async function deleteProduct(product) {
 
 onMounted(() => fetchProducts())
 </script>
+
+<style scoped>
+.boost-overlay {
+  position: fixed; inset: 0; z-index: 1060; background: rgba(0,0,0,.65);
+  display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);
+}
+</style>

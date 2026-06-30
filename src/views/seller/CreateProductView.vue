@@ -23,7 +23,7 @@
             <div class="row g-3">
               <div class="col-lg-8">
                 <div class="row g-3">
-                  <div class="col-md-4" v-for="t in listingTypes" :key="t.value">
+                  <div class="col-md-6" v-for="t in listingTypes" :key="t.value">
                     <input type="radio" v-model="form.listingType" :value="t.value" class="d-none" :id="'type-' + t.value" />
                     <label :for="'type-' + t.value" class="listing-type-card w-100 h-100 d-block" :class="{ active: form.listingType === t.value }">
                       <div class="listing-type-icon">
@@ -80,20 +80,6 @@
                   </div>
                 </div>
 
-                <!-- Condition -->
-                <div class="form-group row mb-3">
-                  <label class="col-md-4 col-form-label">Condition</label>
-                  <div class="col-md-8">
-                    <select class="form-select" v-model="form.condition">
-                      <option value="">Select a condition</option>
-                      <option value="new">New</option>
-                      <option value="like_new">Like New</option>
-                      <option value="good">Good</option>
-                      <option value="fair">Fair</option>
-                      <option value="poor">Poor</option>
-                    </select>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -103,9 +89,9 @@
             <h5 class="text-cream mb-4"><span class="text-gold me-2">03.</span> Pricing & Inventory</h5>
             <div class="row g-3">
               <div class="col-md-8">
-                <!-- Sale Price -->
+                <!-- Price (or Daily Rate for rentals) -->
                 <div class="form-group row mb-3">
-                  <label class="col-md-4 col-form-label">Sale Price (EGP) <span class="text-danger">*</span></label>
+                  <label class="col-md-4 col-form-label">{{ showRentFields ? 'Daily Rate (EGP/day)' : 'Sale Price (EGP)' }} <span class="text-danger">*</span></label>
                   <div class="col-md-8">
                     <div class="input-group">
                       <span class="input-group-text">EGP</span>
@@ -114,17 +100,6 @@
                              placeholder="0.00" />
                     </div>
                     <div class="invalid-feedback">{{ errors.price }}</div>
-                  </div>
-                </div>
-
-                <!-- Original Price -->
-                <div class="form-group row mb-3">
-                  <label class="col-md-4 col-form-label">Original Price (EGP)</label>
-                  <div class="col-md-8">
-                    <div class="input-group">
-                      <span class="input-group-text">EGP</span>
-                      <input class="form-control" type="number" v-model="form.old_price" min="0" step="0.01" placeholder="0.00" />
-                    </div>
                   </div>
                 </div>
 
@@ -154,54 +129,21 @@
             </div>
           </div>
 
-          <!-- Step 4: Rental Pricing (if applicable) -->
-          <div class="card p-4 mb-4" v-if="showRentFields">
-            <h5 class="text-cream mb-4"><span class="text-gold me-2">04.</span> Renting Pricing</h5>
-            <div class="row g-3">
-              <div class="col-md-8">
-                <!-- Daily Rate -->
-                <div class="form-group row mb-3">
-                  <label class="col-md-4 col-form-label">Daily Rate (EGP) <span class="text-danger">*</span></label>
-                  <div class="col-md-8">
-                    <div class="input-group">
-                      <span class="input-group-text">EGP</span>
-                      <input class="form-control" type="number" v-model="form.daily_rental_price"
-                             :class="{ 'is-invalid': errors.daily_rental_price }" min="0" step="0.01"
-                             placeholder="0.00" />
-                    </div>
-                    <div class="invalid-feedback">{{ errors.daily_rental_price }}</div>
-                  </div>
-                </div>
-
-                <!-- Min Rent Days -->
-                <div class="form-group row mb-3">
-                  <label class="col-md-4 col-form-label">Min Rent Days</label>
-                  <div class="col-md-8">
-                    <input class="form-control" type="number" v-model="form.min_rental_days" min="1" placeholder="1" />
-                  </div>
-                </div>
-
-                <!-- Max Rent Days -->
-                <div class="form-group row mb-3">
-                  <label class="col-md-4 col-form-label">Max Rent Days</label>
-                  <div class="col-md-8">
-                    <input class="form-control" type="number" v-model="form.max_rental_days" min="1" placeholder="30" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 5: Images -->
+          <!-- Step 4: Images -->
           <div class="card p-4 mb-4">
-            <h5 class="text-cream mb-4"><span class="text-gold me-2">0{{ showRentFields ? '5' : '4' }}.</span> Product Images</h5>
+            <h5 class="text-cream mb-4"><span class="text-gold me-2">04.</span> Product Images</h5>
             <div class="row g-3">
               <div class="col-md-8">
                 <div class="form-group">
                   <label class="form-label">Upload Images (Max 5)</label>
-                  <input type="file" class="form-control" multiple accept="image/*" @change="handleImageUpload" :class="{ 'is-invalid': errors.images }" />
+                  <input type="file" class="form-control" multiple accept="image/*" @change="handleImageUpload" :disabled="checkingImage" :class="{ 'is-invalid': errors.images }" />
                   <div class="invalid-feedback">{{ errors.images }}</div>
-                  <div class="text-muted mt-1" style="font-size:.75rem;">First image will be the main product image</div>
+                  <div class="text-gold mt-1" style="font-size:.75rem;" v-if="checkingImage">
+                    <span class="spinner-border spinner-border-sm me-1" style="width:.8rem;height:.8rem;"></span>Checking photo…
+                  </div>
+                  <div class="text-muted mt-1" style="font-size:.75rem;" v-else>
+                    <i class="bi bi-shield-check text-gold me-1"></i>Electronics only — each photo is checked by AI. First image is the cover.
+                  </div>
                 </div>
 
                 <!-- Image previews -->
@@ -234,7 +176,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { productService, categoryService } from '@/services/api'
+import { productService, categoryService, imageService, aiService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
 
@@ -246,11 +188,11 @@ const categories = ref([])
 const submitting = ref(false)
 const imagePreviews = ref([])
 const imageFiles = ref([])
+const checkingImage = ref(false) // running the AI electronic-photo check
 
 const listingTypes = [
   { value: 'sale', label: 'For Sale', icon: 'bi bi-tag' },
   { value: 'rental', label: 'For Rent', icon: 'bi bi-clock' },
-  { value: 'both', label: 'Both', icon: 'bi bi-tags' }
 ]
 
 const form = reactive({
@@ -258,14 +200,9 @@ const form = reactive({
   name: '',
   description: '',
   category_id: '',
-  condition: '',
   price: 0,
-  old_price: null,
   quantity: 1,
   isActive: true,
-  daily_rental_price: null,
-  min_rental_days: 1,
-  max_rental_days: 30
 })
 
 const errors = reactive({
@@ -274,7 +211,6 @@ const errors = reactive({
   category_id: '',
   price: '',
   quantity: '',
-  daily_rental_price: '',
   images: ''
 })
 
@@ -314,34 +250,45 @@ function validate() {
     valid = false
   }
 
-  if (showRentFields.value) {
-    if (!form.daily_rental_price || form.daily_rental_price <= 0) {
-      errors.daily_rental_price = 'Daily rental price is required'
-      valid = false
-    }
-  }
-
   return valid
 }
 
-function handleImageUpload(event) {
-  const files = Array.from(event.target.files)
-  
-  if (files.length + imageFiles.value.length > 5) {
-    errors.images = 'Maximum 5 images allowed'
-    return
-  }
+async function handleImageUpload(event) {
+  let files = Array.from(event.target.files)
+  event.target.value = '' // allow re-selecting the same file after a rejection
 
+  const slots = 5 - imageFiles.value.length
+  if (slots <= 0) { errors.images = 'Maximum 5 images allowed'; return }
+  files = files.slice(0, slots)
   errors.images = ''
-  imageFiles.value.push(...files)
 
-  files.forEach(file => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      imagePreviews.value.push(e.target.result)
+  // AI gate: only accept electronic-product photos (fails OPEN if AI is down).
+  checkingImage.value = true
+  let rejected = 0
+  for (const file of files) {
+    let accept = true, message = ''
+    try {
+      const res = await aiService.detectElectronic(file)
+      const d = res.data || {}
+      accept = d.accept !== false
+      message = d.message || ''
+    } catch (_) {
+      accept = true // fail open
     }
-    reader.readAsDataURL(file)
-  })
+    if (accept) {
+      imageFiles.value.push(file)
+      const reader = new FileReader()
+      reader.onload = (e) => imagePreviews.value.push(e.target.result)
+      reader.readAsDataURL(file)
+    } else {
+      rejected++
+      toast.error(message || 'We only accept electronics — that photo was rejected.')
+    }
+  }
+  checkingImage.value = false
+  if (rejected > 0 && imageFiles.value.length === 0) {
+    errors.images = 'Please upload a clear photo of the electronic item.'
+  }
 }
 
 function removeImage(index) {
@@ -358,11 +305,11 @@ async function onSubmit() {
   submitting.value = true
 
   try {
-    // Prepare the payload
+    // For rentals the `price` field IS the daily rate (matches the app + backend).
     const payload = {
       name: form.name.trim(),
       description: form.description?.trim(),
-      category_id: parseInt(form.category_id), // Ensure it's an integer
+      category_id: parseInt(form.category_id),
       price: parseFloat(form.price),
       quantity: parseInt(form.quantity),
       status: form.isActive ? 1 : 0,
@@ -370,30 +317,16 @@ async function onSubmit() {
       owner_id: auth.user?.id
     }
 
-    // Add optional fields
-    if (form.old_price) payload.old_price = parseFloat(form.old_price)
-    if (form.condition) payload.condition = form.condition
-
-    // Add rental fields if applicable
-    if (showRentFields.value) {
-      payload.daily_rental_price = parseFloat(form.daily_rental_price)
-      if (form.min_rental_days) payload.min_rental_days = parseInt(form.min_rental_days)
-      if (form.max_rental_days) payload.max_rental_days = parseInt(form.max_rental_days)
-    }
-
     // Create the product
     const productRes = await productService.create(payload)
     const productId = productRes.data?.data?.id || productRes.data?.id
 
-    // Upload images if any
-    if (imageFiles.value.length > 0) {
-      for (const file of imageFiles.value) {
-        const formData = new FormData()
-        formData.append('image', file)
-        formData.append('product_id', productId)
-        
-        await productService.uploadImage(productId, formData)
-      }
+    // Upload images (one multipart request, field name images[]).
+    if (productId && imageFiles.value.length > 0) {
+      const formData = new FormData()
+      formData.append('product_id', productId)
+      imageFiles.value.forEach(file => formData.append('images[]', file))
+      try { await imageService.upload(formData) } catch (_) { /* product still created */ }
     }
 
     toast.success('Product published successfully!')

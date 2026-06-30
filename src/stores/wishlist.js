@@ -1,16 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { wishlistService } from '@/services/api'
+import { wishlistService, productService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { unwrapList } from '@/utils/helpers'
 
 export const useWishlistStore = defineStore('wishlist', () => {
   const items   = ref([])
   const loading = ref(false)
 
-  // Map of product_id → wishlist item id (for removal)
+  // Map of product_id → wishlist row id (the API uses `wishlist_id`, nested product)
   const itemMap = computed(() => {
     const m = {}
-    items.value.forEach(i => { m[i.product_id || i.product?.id] = i.id })
+    items.value.forEach(i => { m[i.product?.id ?? i.product_id] = i.wishlist_id ?? i.id })
     return m
   })
 
@@ -25,8 +26,22 @@ export const useWishlistStore = defineStore('wishlist', () => {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) { items.value = []; return }
     try {
-      const res = await wishlistService.getAll()
-      items.value = res.data?.data || res.data || []
+      const res = await wishlistService.getAll({ user_id: auth.user?.id, per_page: 100 })
+      const rows = res.data?.data || res.data || []
+      // Wishlist's nested product omits images — hydrate them in one batched request.
+      const ids = [...new Set(rows.map(r => r.product?.id ?? r.product_id).filter(Boolean))]
+      if (ids.length) {
+        try {
+          const pr = await productService.getAll({ ids: ids.join(','), per_page: ids.length })
+          const byId = {}
+          unwrapList(pr).forEach(p => { byId[p.id] = p })
+          rows.forEach(r => {
+            const full = byId[r.product?.id ?? r.product_id]
+            if (full) r.product = full
+          })
+        } catch (_) { /* keep as-is */ }
+      }
+      items.value = rows
     } catch (_) {
       items.value = []
     }
@@ -38,13 +53,13 @@ export const useWishlistStore = defineStore('wishlist', () => {
     loading.value = true
     try {
       if (isInWishlist(productId)) {
-        // Remove using the wishlist item id (not product id)
         const wishlistItemId = itemMap.value[productId]
         await wishlistService.remove(wishlistItemId)
-        items.value = items.value.filter(i => i.id !== wishlistItemId)
+        items.value = items.value.filter(i => (i.wishlist_id ?? i.id) !== wishlistItemId)
         return { added: false }
       } else {
-        await wishlistService.add({ product_id: productId })
+        // Backend requires user_id.
+        await wishlistService.add({ user_id: auth.user.id, product_id: productId })
         await fetchWishlist()
         return { added: true }
       }

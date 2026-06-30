@@ -57,14 +57,18 @@
             <!-- Rentable toggle -->
             <div class="mb-3">
               <div class="form-check">
-                <input 
-                  class="form-check-input" 
-                  type="checkbox" 
-                  v-model="filters.rentable" 
-                  id="rentable" 
-                  @change="fetchProducts(1)" 
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  v-model="filters.rentable"
+                  id="rentable"
+                  @change="fetchProducts(1)"
                 />
                 <label class="form-check-label text-muted" for="rentable">Rentable only</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" v-model="filters.inStock" id="inStock" />
+                <label class="form-check-label text-muted" for="inStock">In stock only</label>
               </div>
             </div>
 
@@ -110,6 +114,14 @@
 
         <!-- Products grid -->
         <div class="col-lg-9">
+          <!-- Source tabs: Tasleem store vs user listings -->
+          <ul class="nav nav-pills gap-2 mb-3">
+            <li class="nav-item" v-for="s in sources" :key="s.v">
+              <button class="nav-link" :class="{ active: source === s.v }" @click="source = s.v">
+                <i :class="s.icon + ' me-1'"></i>{{ s.l }}
+              </button>
+            </li>
+          </ul>
           <!-- Toolbar -->
           <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
             <div class="text-muted" style="font-size:.9rem;">
@@ -136,7 +148,7 @@
 
           <!-- Grid view -->
           <div class="row g-4" v-if="viewMode === 'grid'">
-            <div class="col-6 col-md-4 col-xl-4" v-for="product in products" :key="product.id">
+            <div class="col-6 col-md-4 col-xl-4" v-for="product in shown" :key="product.id">
               <ProductCard :product="product" />
             </div>
             <div class="col-6 col-md-4 col-xl-4" v-if="loading" v-for="n in 9" :key="'sk'+n">
@@ -146,10 +158,10 @@
 
           <!-- List view -->
           <div class="d-flex flex-column gap-3" v-else>
-            <div 
-              class="card card-hover p-0 overflow-hidden" 
-              v-for="product in products" 
-              :key="product.id" 
+            <div
+              class="card card-hover p-0 overflow-hidden"
+              v-for="product in shown"
+              :key="product.id"
               @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" 
               style="cursor:pointer;"
             >
@@ -185,7 +197,7 @@
           </div>
 
           <!-- Empty state -->
-          <div v-if="!loading && products.length === 0" class="text-center py-5">
+          <div v-if="!loading && total === 0" class="text-center py-5">
             <i class="bi bi-search text-muted" style="font-size:3rem;"></i>
             <h5 class="text-muted mt-3">No products found</h5>
             <button class="btn btn-outline-gold btn-sm mt-2" @click="resetFilters">Clear Filters</button>
@@ -203,9 +215,11 @@
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { productService, categoryService, aiService } from '@/services/api'
+import { aiSearch } from '@/services/ai'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
+import { unwrapList, pagination, productImage, hideMine } from '@/utils/helpers'
 import ProductCard from '@/components/ui/ProductCard.vue'
 import ProductSkeleton from '@/components/ui/ProductSkeleton.vue'
 import Pagination from '@/components/ui/Pagination.vue'
@@ -219,18 +233,48 @@ const toast = useToast()
 const products = ref([])
 const categories = ref([])
 const loading = ref(true)
-const total = ref(0)
 const currentPage = ref(1)
-const totalPages = ref(1)
 const viewMode = ref('grid')
+const PER = 24
+const serverTotal = ref(0)
+const serverPages = ref(1)
+// 'server' = paged whole catalogue (All tab); 'client' = a focused set we
+// filter/paginate locally (a source tab or a search), so Users/Tasleem are complete.
+const pageMode = ref('server')
+
+// Source tabs (client-side filter on the current page).
+const source = ref('all')
+const sources = [
+  { v: 'all', l: 'All', icon: 'bi bi-grid' },
+  { v: 'tasleem', l: 'Tasleem', icon: 'bi bi-shop' },
+  { v: 'users', l: 'Users', icon: 'bi bi-people' },
+]
+const filtered = computed(() => {
+  let list = hideMine(products.value, auth.user?.id) // never show my own listings
+  if (source.value !== 'all') list = list.filter(p => (source.value === 'tasleem') === (p.owner?.role === 'admin'))
+  if (filters.inStock) list = list.filter(p => p.status === '1' && Number(p.quantity ?? 0) > 0)
+  return list
+})
+const total = computed(() => pageMode.value === 'client' ? filtered.value.length : serverTotal.value)
+const totalPages = computed(() => pageMode.value === 'client'
+  ? Math.max(1, Math.ceil(filtered.value.length / PER))
+  : serverPages.value)
+const shown = computed(() => {
+  if (pageMode.value === 'client') {
+    const p = Math.min(currentPage.value, totalPages.value)
+    return filtered.value.slice((p - 1) * PER, p * PER)
+  }
+  return filtered.value // server mode: products.value is already one page
+})
 
 // FIX: Initialize category_id as empty string
 const filters = reactive({
   search: route.query.search || '',
   category_id: route.query.category_id ? String(route.query.category_id) : '',
   rentable: route.query.rentable === '1',
+  inStock: false,
   max_price: 50000,
-  sort: ''
+  sort: 'rating' // default: Top Rated
 })
 
 let debounceTimer = null
@@ -248,68 +292,56 @@ function formatPrice(val) {
 }
 
 function getProductImage(product) {
-  if (product.images && product.images.length > 0) {
-    return product.images[0].url || product.images[0]
-  }
-  return product.image || null
+  return productImage(product) || null
+}
+
+function onCategoryChange(event) {
+  filters.category_id = event.target.value
+  fetchProducts(1)
 }
 
 function getSortParams(sortValue) {
-  const sortMap = {
-    'price_asc': { sort_by: 'price', sort_order: 'asc' },
-    'price_desc': { sort_by: 'price', sort_order: 'desc' },
-    'newest': { sort_by: 'created_at', sort_order: 'desc' },
-    'oldest': { sort_by: 'created_at', sort_order: 'asc' },
-    'rating': { sort_by: 'rate', sort_order: 'desc' },
-    'popular': { sort_by: 'view_count', sort_order: 'desc' }
+  const m = {
+    price_asc:  { sort_by: 'price', sort_order: 'asc' },
+    price_desc: { sort_by: 'price', sort_order: 'desc' },
+    newest:     { sort_by: 'created_at', sort_order: 'desc' },
+    oldest:     { sort_by: 'created_at', sort_order: 'asc' },
+    rating:     { sort_by: 'rate', sort_order: 'desc' },
+    popular:    { sort_by: 'view_count', sort_order: 'desc' },
   }
-  return sortMap[sortValue] || { sort_by: 'created_at', sort_order: 'desc' }
-}
-
-// FIX: Explicit handler for category change
-function onCategoryChange(event) {
-  const value = event.target.value
-  console.log('Category changed to:', value)
-  filters.category_id = value
-  fetchProducts(1)
+  return m[sortValue] || { sort_by: 'created_at', sort_order: 'desc' }
 }
 
 async function fetchProducts(page = 1) {
   loading.value = true
   currentPage.value = page
-  
+  const q = (filters.search || '').trim()
+  const s = getSortParams(filters.sort)
+  const common = {}
+  if (filters.category_id) common.category_id = filters.category_id
+  if (filters.rentable) common.type = 'rental'
+  if (filters.max_price < 50000) common.max_price = filters.max_price
   try {
-    const sortParams = getSortParams(filters.sort)
-    
-    const params = {
-      page,
-      per_page: 9,
-      search: filters.search || undefined,
-      // FIX: Only include category_id if it's not empty
-      category_id: (filters.category_id && filters.category_id !== '') ? filters.category_id : undefined,
-      type: filters.rentable ? 'rental' : undefined,
-      max_price: filters.max_price < 50000 ? filters.max_price : undefined,
-      sort_by: sortParams.sort_by,
-      sort_order: sortParams.sort_order
+    if (q) {
+      // Search → AI semantic results (client-paginated), keyword fallback.
+      pageMode.value = 'client'
+      const ai = await aiSearch(q, 48)
+      products.value = (ai && ai.length)
+        ? ai
+        : unwrapList(await productService.getAll({ search: q, per_page: 48 }, { timeout: 30000 }))
+    } else {
+      // Browse — real server-side pagination. The backend ?source= filter keeps the
+      // Tasleem / Users tabs complete and correctly paged (no client-side capping).
+      pageMode.value = 'server'
+      const params = { page, per_page: PER, sort_by: s.sort_by, sort_order: s.sort_order, ...common }
+      if (source.value !== 'all') params.source = source.value
+      const res = await productService.getAll(params, { timeout: 30000 })
+      const meta = pagination(res)
+      products.value = unwrapList(res)
+      serverTotal.value = meta.total ?? products.value.length
+      serverPages.value = meta.last_page ?? 1
     }
-    
-    // Remove undefined values
-    Object.keys(params).forEach(key => {
-      if (params[key] === undefined || params[key] === null || params[key] === '') {
-        delete params[key]
-      }
-    })
-    
-    console.log('Fetching products with params:', params)
-    
-    const res = await productService.getAll(params)
-    const data = res.data?.data || res.data
-    
-    products.value = data.data || data || []
-    total.value = data.total || products.value.length
-    totalPages.value = data.last_page || Math.ceil(total.value / 9) || 1
   } catch (e) {
-    console.error('Failed to fetch products:', e)
     products.value = []
     toast.error('Failed to load products')
   } finally {
@@ -335,8 +367,10 @@ function resetFilters() {
   filters.search = ''
   filters.category_id = ''
   filters.rentable = false
+  filters.inStock = false
   filters.max_price = 50000
   filters.sort = ''
+  source.value = 'all'
   fetchProducts(1)
 }
 
@@ -357,4 +391,21 @@ onMounted(async () => {
   
   await fetchProducts(1)
 })
+
+// React to a new search coming from the navbar (e.g. "See all results").
+watch(() => route.query.search, (v) => {
+  const val = v || ''
+  if (val !== filters.search) {
+    filters.search = val
+    fetchProducts(1)
+  }
+})
+
+// Switching Tasleem/Users/All changes the fetch strategy → reload.
+watch(source, () => fetchProducts(1))
 </script>
+
+<style scoped>
+.nav-pills .nav-link { color: var(--text-muted); background: var(--navy-light); border: 1px solid var(--navy-border); }
+.nav-pills .nav-link.active { background: var(--gold); color: var(--navy); border-color: var(--gold); }
+</style>

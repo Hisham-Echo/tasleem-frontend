@@ -1,7 +1,28 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { cartService } from '@/services/api'
+import { cartService, productService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { unwrapList, productImage } from '@/utils/helpers'
+
+// Normalise a backend cart row (cart_item_id + nested product) to a flat shape
+// the cart UI + checkout already expect (id, product_id, name, image, price…).
+function normalizeCartItem(ci) {
+  const p = ci.product || {}
+  return {
+    id: ci.cart_item_id ?? ci.id,
+    cart_item_id: ci.cart_item_id ?? ci.id,
+    product_id: p.id ?? ci.product_id,
+    product: p,
+    name: p.name,
+    image: productImage(p),
+    price: Number(p.price ?? ci.price ?? 0),
+    quantity: ci.quantity ?? 1,
+    item_type: ci.item_type,
+    subtotal: Number(ci.subtotal ?? 0),
+    rental_start_date: ci.rental_start_date,
+    rental_end_date: ci.rental_end_date,
+  }
+}
 
 export const useCartStore = defineStore('cart', () => {
   const items    = ref([])
@@ -33,19 +54,38 @@ export const useCartStore = defineStore('cart', () => {
     if (!auth.isAuthenticated) { items.value = []; return }
     try {
       const res = await cartService.get()
-      const purchases = res.data?.items        || []
-      const rentals   = res.data?.rental_items || []
-      items.value = [...purchases, ...rentals]
+      const rows = unwrapList(res).map(normalizeCartItem)
+      // The cart's nested product omits the images relation, so hydrate images
+      // in one batched request (/products?ids=…) — same trick as AI search.
+      await hydrateImages(rows)
+      items.value = rows
     } catch (_) {
       items.value = []
     }
   }
 
+  async function hydrateImages(rows) {
+    const ids = [...new Set(rows.map(r => r.product_id).filter(Boolean))]
+    if (!ids.length) return
+    try {
+      const res = await productService.getAll({ ids: ids.join(','), per_page: ids.length })
+      const byId = {}
+      unwrapList(res).forEach(p => { byId[p.id] = p })
+      rows.forEach(r => {
+        const full = byId[r.product_id]
+        if (full) { r.product = full; r.image = productImage(full) }
+      })
+    } catch (_) { /* keep whatever images we have */ }
+  }
+
   // ── Add ───────────────────────────────────────────────────────
   async function addItem(productId, quantity = 1) {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) return { success: false, message: 'Please sign in' }
     loading.value = true
     try {
-      await cartService.addItem({ product_id: productId, quantity })
+      // Backend requires user_id + item_type.
+      await cartService.addItem({ user_id: auth.user.id, product_id: productId, quantity, item_type: 'purchase' })
       await fetchCart()
       return { success: true }
     } catch (err) {
@@ -56,9 +96,14 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   async function addRental(productId, startDate, endDate) {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) return { success: false, message: 'Please sign in' }
     loading.value = true
     try {
-      await cartService.addRental({ product_id: productId, start_date: startDate, end_date: endDate })
+      await cartService.addItem({
+        user_id: auth.user.id, product_id: productId, quantity: 1,
+        item_type: 'rental', rental_start_date: startDate, rental_end_date: endDate,
+      })
       await fetchCart()
       return { success: true }
     } catch (err) {
@@ -80,6 +125,9 @@ export const useCartStore = defineStore('cart', () => {
 
     // FIX: optimistic update — change quantity immediately so UI responds instantly
     const item = items.value.find(i => i.id === id)
+    // Never exceed the product's available stock.
+    const maxQ = Number(item?.product?.quantity) || 0
+    if (maxQ > 0 && quantity > maxQ) quantity = maxQ
     const prevQty = item?.quantity
     if (item) item.quantity = quantity
 

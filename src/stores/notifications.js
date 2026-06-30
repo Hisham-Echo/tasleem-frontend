@@ -17,7 +17,9 @@ export const useNotificationStore = defineStore('notifications', () => {
     loading.value = true
     try {
       const res = await notificationService.getAll()
-      items.value = res.data?.data || res.data || []
+      // Backend shape: { data: { notifications: [...], unread_count } }
+      const d = res.data?.data || res.data || {}
+      items.value = d.notifications || d.data || (Array.isArray(d) ? d : [])
     } catch (_) {
       // Notifications endpoint may not exist yet — fail silently
       items.value = []

@@ -1,354 +1,191 @@
 <template>
   <div>
-    <!-- Hero Section -->
-    <section class="hero-section">
+    <!-- Hero: dynamic Featured Deals carousel -->
+    <section class="hero-wrap">
       <div class="container">
-        <div class="row align-items-center g-5">
-          <div class="col-lg-6">
-            <h1 class="hero-title mb-3">
-              Welcome to <span class="text-gold">Tasleem</span>
-            </h1>
-            <p class="hero-subtitle mb-4">
-              Your trusted luxury marketplace for buying, selling, and renting premium products across Egypt.
-            </p>
-            <div class="d-flex gap-3 flex-wrap">
-              <RouterLink to="/products" class="btn btn-gold btn-lg px-4">
-                <i class="bi bi-bag me-2"></i>Shop Now
-              </RouterLink>
-              <RouterLink to="/seller" class="btn btn-outline-gold btn-lg px-4">
-                <i class="bi bi-shop me-2"></i>Start Selling
-              </RouterLink>
+        <div class="hero-card" v-if="heroItems.length">
+          <div class="hero-info">
+            <span class="badge badge-gold mb-2" style="width:fit-content;">
+              <i class="bi bi-star-fill me-1"></i>Featured Deal
+            </span>
+            <h1 class="hero-name">{{ heroProduct.name }}</h1>
+            <p class="hero-cat mb-2" v-if="heroProduct.category">{{ heroProduct.category?.name }}</p>
+            <div class="hero-price mb-3">{{ formatPrice(heroProduct.price) }}</div>
+            <div class="d-flex gap-2">
+              <RouterLink :to="`/products/${heroProduct.id}`" class="btn btn-gold px-4"><i class="bi bi-bag me-2"></i>View Deal</RouterLink>
+              <RouterLink to="/products" class="btn btn-outline-gold px-4">Browse All</RouterLink>
             </div>
           </div>
-          <div class="col-lg-6 d-none d-lg-block">
-            <div class="hero-image-placeholder">
-              <i class="bi bi-shop-window text-gold" style="font-size:8rem;"></i>
-            </div>
+          <div class="hero-media">
+            <img v-if="heroImg" :src="heroImg" :alt="heroProduct.name" @error="heroImgError = true" />
+            <i v-else class="bi bi-bag-heart text-gold" style="font-size:5rem;opacity:.6;"></i>
           </div>
+          <div class="hero-dots" v-if="heroItems.length > 1">
+            <span v-for="(p,i) in heroItems" :key="i" :class="{ active: i === heroIndex }" @click="setHero(i)"></span>
+          </div>
+        </div>
+        <div class="hero-card hero-skeleton" v-else>
+          <div class="hero-info"><div class="skeleton" style="height:2rem;width:60%;margin-bottom:1rem;"></div><div class="skeleton" style="height:1rem;width:40%;"></div></div>
         </div>
       </div>
     </section>
 
-    <!-- Categories Section -->
-    <section class="py-5" style="background:var(--navy);">
+    <!-- Categories — horizontal scroll row -->
+    <section class="py-4" style="background:var(--navy);">
       <div class="container">
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <i class="bi bi-grid-3x3-gap text-gold fs-4"></i>
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-grid-3x3-gap text-gold fs-5"></i>
           <h2 class="section-title text-cream mb-0">Shop by Category</h2>
         </div>
-        <div class="row g-3">
-          <div class="col-6 col-md-4 col-lg-3" v-for="cat in categories" :key="cat.id || cat.category_id">
-            <RouterLink 
-              :to="{ path: '/products', query: { category_id: cat.id || cat.category_id } }" 
-              class="category-card text-decoration-none"
-            >
-              <div class="category-icon">
-                <i class="bi bi-tag text-gold fs-3"></i>
-              </div>
-              <div class="category-name text-cream">{{ cat.name }}</div>
-            </RouterLink>
-          </div>
-          <div class="col-6 col-md-4 col-lg-3" v-if="categoriesLoading" v-for="n in 8" :key="'sk'+n">
-            <div class="category-card">
-              <div class="skeleton" style="height:80px;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Trending Section (AI-powered) -->
-    <section class="py-5">
-      <div class="container">
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <i class="bi bi-fire text-gold fs-4"></i>
-          <h2 class="section-title text-cream mb-0">Trending Now</h2>
-        </div>
-        <div class="row g-4">
-          <div class="col-6 col-md-4 col-xl-3" v-for="product in trendingProducts" :key="product.id">
-            <ProductCard :product="product" />
-          </div>
-          <div class="col-6 col-md-4 col-xl-3" v-if="trendingLoading" v-for="n in 8" :key="'tr'+n">
-            <ProductSkeleton />
-          </div>
-        </div>
-        <div v-if="!trendingLoading && trendingProducts.length === 0" class="text-center py-4">
-          <p class="text-muted">No trending products available right now.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Personalized Recommendations (AI-powered, auth required) -->
-    <section class="py-5" v-if="auth.isAuthenticated && recommendations.length > 0" style="background:var(--navy);">
-      <div class="container">
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <i class="bi bi-stars text-gold fs-4"></i>
-          <h2 class="section-title text-cream mb-0">{{ recSection }}</h2>
-        </div>
-        <div class="row g-4">
-          <div class="col-6 col-md-4 col-xl-3" v-for="product in recommendations" :key="product.id">
-            <ProductCard :product="product" />
-          </div>
-          <div class="col-6 col-md-4 col-xl-3" v-if="recLoading" v-for="n in 8" :key="'rec'+n">
-            <ProductSkeleton />
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Explore Section (AI-powered) -->
-    <section class="py-5">
-      <div class="container">
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <i class="bi bi-compass text-gold fs-4"></i>
-          <h2 class="section-title text-cream mb-0">Explore More</h2>
-        </div>
-        <div class="row g-4">
-          <div class="col-6 col-md-4 col-xl-3" v-for="product in exploreProducts" :key="product.id">
-            <ProductCard :product="product" />
-          </div>
-          <div class="col-6 col-md-4 col-xl-3" v-if="exploreLoading" v-for="n in 8" :key="'exp'+n">
-            <ProductSkeleton />
-          </div>
-        </div>
-        <div v-if="!exploreLoading && exploreProducts.length === 0" class="text-center py-4">
-          <p class="text-muted">No products to explore right now.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Featured Products -->
-    <section class="py-5" style="background:var(--navy);">
-      <div class="container">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-          <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-star text-gold fs-4"></i>
-            <h2 class="section-title text-cream mb-0">Featured Products</h2>
-          </div>
-          <RouterLink to="/products" class="btn btn-outline-gold btn-sm">
-            View All <i class="bi bi-arrow-right ms-1"></i>
+        <div class="cat-row">
+          <RouterLink v-for="cat in categories" :key="cat.id || cat.category_id"
+            :to="{ path: '/products', query: { category_id: cat.id || cat.category_id } }" class="cat-chip">
+            <i class="bi bi-tag text-gold"></i><span>{{ cat.name }}</span>
           </RouterLink>
-        </div>
-        <div class="row g-4">
-          <div class="col-6 col-md-4 col-xl-3" v-for="product in featuredProducts" :key="product.id">
-            <ProductCard :product="product" />
-          </div>
-          <div class="col-6 col-md-4 col-xl-3" v-if="productsLoading" v-for="n in 8" :key="'feat'+n">
-            <ProductSkeleton />
-          </div>
+          <div v-if="categoriesLoading" v-for="n in 6" :key="'cs'+n" class="cat-chip skeleton" style="min-width:120px;height:44px;"></div>
         </div>
       </div>
+    </section>
+
+    <ProductRow title="Featured Deals" icon="bi bi-star" :products="featuredProducts" :loading="productsLoading" see-all="/products" />
+    <ProductRow :title="recSection" icon="bi bi-stars" :products="recommendations" :loading="recLoading" bg v-if="recommendations.length || recLoading" />
+    <ProductRow title="Trending Now" icon="bi bi-fire" :products="trendingProducts" :loading="trendingLoading" />
+    <ProductRow title="Explore More" icon="bi bi-compass" :products="exploreProducts" :loading="exploreLoading" bg />
+    <!-- Browse-all CTA (instead of dumping the whole catalogue on the home page) -->
+    <section class="container py-5 text-center">
+      <h3 class="text-cream mb-2">Looking for something specific?</h3>
+      <p class="text-muted mb-4">Browse the full catalogue — Tasleem store items and listings from sellers.</p>
+      <RouterLink to="/products" class="btn btn-gold btn-lg px-5">
+        <i class="bi bi-grid-3x3-gap me-2"></i>Show All Products
+      </RouterLink>
     </section>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { productService, categoryService, aiService } from '@/services/api'
-import ProductCard from '@/components/ui/ProductCard.vue'
-import ProductSkeleton from '@/components/ui/ProductSkeleton.vue'
+import { productService, categoryService } from '@/services/api'
+import { aiTrending, aiExplore, aiRecommend, aiSimilar } from '@/services/ai'
+import { unwrapList, productImage, hideMine, boostedFirst, formatPrice } from '@/utils/helpers'
+import ProductRow from '@/components/ui/ProductRow.vue'
 
 const auth = useAuthStore()
+const meId = computed(() => auth.user?.id)
+const mine = list => hideMine(list, meId.value)
+
 const featuredProducts = ref([])
 const categories = ref([])
 const recommendations = ref([])
 const recSection = ref('For You')
 const trendingProducts = ref([])
 const exploreProducts = ref([])
+const allProducts = ref([])
 const productsLoading = ref(true)
 const categoriesLoading = ref(true)
 const trendingLoading = ref(true)
-const exploreLoading = ref(false)
+const exploreLoading = ref(true)
 const recLoading = ref(false)
+const allLoading = ref(true)
 
-// Load trending products using AI service (with fallback)
+// ── Hero carousel ──
+const heroIndex = ref(0)
+const heroImgError = ref(false)
+let heroTimer = null
+const heroItems = computed(() => boostedFirst(featuredProducts.value).slice(0, 5))
+const heroProduct = computed(() => heroItems.value[heroIndex.value] || {})
+const heroImg = computed(() => heroImgError.value ? '' : productImage(heroProduct.value))
+function setHero(i) { heroIndex.value = i; heroImgError.value = false }
+watch(heroIndex, () => { heroImgError.value = false })
+
 async function loadTrending() {
   trendingLoading.value = true
   try {
-    const res = await aiService.trending(8)
-    const products = res.data?.data?.products || []
-    if (products.length > 0) {
-      trendingProducts.value = products
-      return
-    }
-    throw new Error('No products returned')
-  } catch (e) {
-    console.warn('AI trending not available, using fallback:', e.message)
-    // Fallback to newest products
-    try {
-      const fallback = await productService.getAll({ 
-        sort_by: 'created_at', 
-        sort_order: 'desc', 
-        per_page: 8 
-      })
-      trendingProducts.value = fallback.data?.data?.data || fallback.data?.data || []
-    } catch (err) {
-      console.error('Fallback also failed:', err)
-      trendingProducts.value = []
-    }
-  } finally {
-    trendingLoading.value = false
-  }
+    const ai = await aiTrending(8)
+    if (ai) { trendingProducts.value = mine(ai); return }
+    const fb = await productService.getAll({ sort_by: 'view_count', sort_order: 'desc', per_page: 12 })
+    trendingProducts.value = mine(unwrapList(fb)).slice(0, 8)
+  } catch (_) { trendingProducts.value = [] } finally { trendingLoading.value = false }
 }
-
-// Load explore products using AI service (with fallback)
 async function loadExplore() {
   exploreLoading.value = true
   try {
-    const res = await aiService.explore(8)
-    const products = res.data?.data?.products || []
-    if (products.length > 0) {
-      exploreProducts.value = products
-      return
-    }
-    throw new Error('No products returned')
-  } catch (e) {
-    console.warn('AI explore not available, using fallback:', e.message)
-    // Fallback to popular products
-    try {
-      const fallback = await productService.getAll({ 
-        sort_by: 'view_count', 
-        sort_order: 'desc', 
-        per_page: 8 
-      })
-      exploreProducts.value = fallback.data?.data?.data || fallback.data?.data || []
-    } catch (err) {
-      console.error('Fallback also failed:', err)
-      exploreProducts.value = []
-    }
-  } finally {
-    exploreLoading.value = false
-  }
+    const ai = await aiExplore(8)
+    if (ai) { exploreProducts.value = mine(ai); return }
+    const fb = await productService.getAll({ sort_by: 'created_at', sort_order: 'desc', per_page: 12 })
+    exploreProducts.value = mine(unwrapList(fb)).slice(0, 8)
+  } catch (_) { exploreProducts.value = [] } finally { exploreLoading.value = false }
 }
-
-// Load personalized recommendations using AI service (with fallback)
 async function loadRecommendations() {
-  if (!auth.isAuthenticated || !auth.user?.id) return
-  
   recLoading.value = true
   try {
-    const res = await aiService.forUser()
-    const products = res.data?.data?.products || []
-    if (products.length > 0) {
-      recommendations.value = products
-      recSection.value = res.data?.data?.section || 'Recommended for You'
-      return
+    const uid = meId.value
+    const last = localStorage.getItem('tasleem_last_product') || null
+    if (uid) {
+      const ai = await aiRecommend(uid, 8, last)
+      if (ai && ai.products.length) { recommendations.value = mine(ai.products); recSection.value = ai.section; return }
+    } else if (last) {
+      // Anonymous visitor who has viewed a product → show items based on that view.
+      const sim = await aiSimilar(last, 8)
+      if (sim && sim.length) { recommendations.value = mine(sim); recSection.value = 'Based on your last view'; return }
     }
-    throw new Error('No products returned')
-  } catch (e) {
-    console.warn('AI recommendations not available, using fallback:', e.message)
-    // Fallback to featured products
-    recommendations.value = featuredProducts.value.slice(0, 8)
-    recSection.value = 'Featured Products'
-  } finally {
-    recLoading.value = false
-  }
+    const fb = await productService.getAll({ sort_by: 'view_count', sort_order: 'desc', per_page: 12 })
+    recommendations.value = mine(unwrapList(fb)).slice(0, 8)
+    recSection.value = 'Recommendations for You'
+  } catch (_) { recommendations.value = [] } finally { recLoading.value = false }
+}
+async function loadAll() {
+  allLoading.value = true
+  try {
+    const res = await productService.getAll({ sort_by: 'created_at', sort_order: 'desc', per_page: 16 })
+    allProducts.value = boostedFirst(mine(unwrapList(res))).slice(0, 8)
+  } catch (_) { allProducts.value = [] } finally { allLoading.value = false }
 }
 
 onMounted(async () => {
-  // Load categories and featured products
   try {
     const [catRes, featuredRes] = await Promise.all([
       categoryService.getAll(),
-      productService.getAll({ per_page: 8, sort_by: 'created_at', sort_order: 'desc' })
+      productService.getAll({ per_page: 12, sort_by: 'rate', sort_order: 'desc' }),
     ])
     categories.value = catRes.data?.data || catRes.data || []
-    featuredProducts.value = featuredRes.data?.data?.data || featuredRes.data?.data || []
-  } catch (e) {
-    console.error('Failed to load initial data:', e)
-  } finally {
+    featuredProducts.value = boostedFirst(mine(unwrapList(featuredRes))).slice(0, 8)
+  } catch (e) { console.error('Home load failed:', e) } finally {
     productsLoading.value = false
     categoriesLoading.value = false
   }
-
-  // Load AI-powered sections (will gracefully fallback if not available)
-  loadTrending()
-  loadExplore()
-  loadRecommendations()
+  loadTrending(); loadRecommendations(); loadExplore()
+  heroTimer = setInterval(() => {
+    if (heroItems.value.length > 1) heroIndex.value = (heroIndex.value + 1) % heroItems.value.length
+  }, 4500)
 })
-
-// Reload recommendations when user logs in
-watch(() => auth.isAuthenticated, (isAuth) => {
-  if (isAuth) {
-    loadRecommendations()
-  } else {
-    recommendations.value = []
-  }
-})
+onUnmounted(() => clearInterval(heroTimer))
+watch(() => auth.isAuthenticated, () => loadRecommendations())
 </script>
 
 <style scoped>
-.hero-section {
-  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
-  padding: 5rem 0;
-  min-height: 500px;
-  display: flex;
-  align-items: center;
-}
+.hero-wrap { padding: 2rem 0; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%); }
+.hero-card { position: relative; display: flex; align-items: center; gap: 2rem; min-height: 300px;
+  background: var(--navy-card); border: 1px solid var(--navy-border); border-radius: 1.5rem; padding: 2.5rem; overflow: hidden; }
+.hero-info { flex: 1 1 55%; z-index: 2; }
+.hero-name { font-size: 2.1rem; font-weight: 800; color: var(--text-cream); line-height: 1.15; }
+.hero-cat { color: var(--text-muted); font-size: .95rem; }
+.hero-price { font-size: 1.8rem; font-weight: 800; color: var(--gold); }
+.hero-media { flex: 0 0 38%; height: 240px; border-radius: 1rem; overflow: hidden; background: var(--navy-light);
+  display: flex; align-items: center; justify-content: center; }
+.hero-media img { width: 100%; height: 100%; object-fit: cover; }
+.hero-dots { position: absolute; bottom: 1rem; left: 2.5rem; display: flex; gap: 6px; }
+.hero-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--navy-border); cursor: pointer; transition: .2s; }
+.hero-dots span.active { background: var(--gold); width: 22px; border-radius: 4px; }
+@media (max-width: 768px) { .hero-card { flex-direction: column; padding: 1.5rem; } .hero-media { width: 100%; flex-basis: auto; } .hero-name { font-size: 1.5rem; } }
 
-.hero-title {
-  font-size: 3rem;
-  font-weight: 800;
-  color: var(--text-cream);
-  line-height: 1.2;
-}
-
-.hero-subtitle {
-  font-size: 1.2rem;
-  color: var(--text-muted);
-  line-height: 1.7;
-}
-
-.hero-image-placeholder {
-  background: rgba(201, 169, 110, 0.1);
-  border: 2px dashed rgba(201, 169, 110, 0.3);
-  border-radius: 2rem;
-  height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.section-title {
-  font-size: 1.8rem;
-  font-weight: 700;
-}
-
-.category-card {
-  background: var(--navy-light);
-  border: 1px solid var(--navy-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  text-align: center;
-  transition: all 0.2s;
-  display: block;
-}
-
-.category-card:hover {
-  border-color: var(--gold);
-  transform: translateY(-4px);
-  box-shadow: 0 10px 30px rgba(201, 169, 110, 0.15);
-}
-
-.category-icon {
-  margin-bottom: 0.75rem;
-}
-
-.category-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.skeleton {
-  background: linear-gradient(90deg, var(--navy-light) 25%, var(--navy-border) 50%, var(--navy-light) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 0.5rem;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
+.cat-row { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem; scrollbar-width: thin; }
+.cat-chip { display: inline-flex; align-items: center; gap: .5rem; flex-shrink: 0; min-width: max-content;
+  background: var(--navy-light); border: 1px solid var(--navy-border); border-radius: 999px; padding: .6rem 1.2rem;
+  color: var(--text-cream); font-weight: 600; font-size: .9rem; text-decoration: none; transition: .15s; }
+.cat-chip:hover { border-color: var(--gold); color: var(--gold); transform: translateY(-2px); }
+.section-title { font-size: 1.6rem; font-weight: 700; }
+.skeleton { background: linear-gradient(90deg, var(--navy-light) 25%, var(--navy-border) 50%, var(--navy-light) 75%);
+  background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: .6rem; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 </style>

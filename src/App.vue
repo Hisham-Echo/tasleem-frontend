@@ -1,13 +1,5 @@
 <template>
   <div id="app-root">
-    <!-- Email verification banner -->
-    <div v-if="auth.isAuthenticated && auth.needsVerification && !isAuthPage && !isVerifyPage"
-      class="verify-banner d-flex align-items-center justify-content-center gap-2 px-3 py-2 flex-wrap">
-      <i class="bi bi-envelope-exclamation-fill"></i>
-      <span style="font-size:.85rem;">Please verify your email address to access all features.</span>
-      <RouterLink to="/verify-email" class="btn btn-sm py-0 px-2" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:.8rem;">Verify Now</RouterLink>
-    </div>
-
     <AppNavbar v-if="!isAuthPage" />
 
     <main class="flex-grow-1" :style="{ paddingBottom: auth.isAuthenticated && !isAuthPage ? '70px' : '0' }" style="min-height:60vh;">
@@ -25,7 +17,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -52,8 +44,14 @@ onMounted(async () => {
   if (auth.isAuthenticated) {
     await auth.fetchMe()
     await Promise.all([cart.fetchCart(), wishlist.fetchWishlist()])
-    // notifications disabled — no backend endpoint yet
+    notifications.startPolling() // backend emits order/offer notifications — fetch + poll them
   }
+})
+
+// Start/stop notification polling when the user logs in/out.
+watch(() => auth.isAuthenticated, (on) => {
+  if (on) notifications.startPolling()
+  else notifications.stopPolling()
 })
 
 onBeforeUnmount(() => {

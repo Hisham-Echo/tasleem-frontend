@@ -85,10 +85,47 @@
                 </li>
               </ul>
               <input v-model="form.phone" type="tel" class="form-control" :class="{ 'is-invalid': errors.phone }"
-                placeholder="10-digit number" autocomplete="tel" inputmode="numeric"
-                @input="form.phone = form.phone.replace(/\D/g, '')" :disabled="isLockedOut" />
+                placeholder="10-digit number" autocomplete="tel" inputmode="numeric" maxlength="10"
+                @input="form.phone = form.phone.replace(/\D/g, '').slice(0, 10)" :disabled="isLockedOut" />
             </div>
             <div class="text-danger mt-1" v-if="errors.phone">{{ errors.phone }}</div>
+          </div>
+
+          <!-- National ID -->
+          <div class="mb-3">
+            <label class="form-label">National ID</label>
+            <div class="input-group">
+              <span class="input-group-text text-muted">🪪</span>
+              <input v-model="form.national_id" type="text" class="form-control" :class="{ 'is-invalid': errors.national_id }"
+                placeholder="14-digit national ID" inputmode="numeric" maxlength="14"
+                @input="form.national_id = form.national_id.replace(/\D/g, '').slice(0, 14)" :disabled="isLockedOut" />
+              <div class="invalid-feedback">{{ errors.national_id }}</div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.73rem;">This can't be changed later.</div>
+          </div>
+
+          <!-- City -->
+          <div class="mb-3">
+            <label class="form-label">City</label>
+            <div class="input-group">
+              <span class="input-group-text text-muted">🏙️</span>
+              <select v-model="form.city" class="form-select" :class="{ 'is-invalid': errors.city }" :disabled="isLockedOut">
+                <option value="">Select your city</option>
+                <option v-for="c in cities" :key="c" :value="c">{{ c }}</option>
+              </select>
+              <div class="invalid-feedback">{{ errors.city }}</div>
+            </div>
+          </div>
+
+          <!-- Address -->
+          <div class="mb-3">
+            <label class="form-label">Address</label>
+            <div class="input-group">
+              <span class="input-group-text text-muted">📍</span>
+              <input v-model="form.address" type="text" class="form-control" :class="{ 'is-invalid': errors.address }"
+                placeholder="Street, building, area" autocomplete="street-address" :disabled="isLockedOut" />
+              <div class="invalid-feedback">{{ errors.address }}</div>
+            </div>
           </div>
 
           <!-- Password -->
@@ -197,6 +234,9 @@ const form = reactive({
   name:                     '',
   email:                    '',
   phone:                    '',
+  national_id:              '',
+  city:                     '',
+  address:                  '',
   password:                 '',
   password_confirmation:    '',
   terms:                    false,
@@ -206,10 +246,15 @@ const errors = reactive({
   name:                     '',
   email:                    '',
   phone:                    '',
+  national_id:              '',
+  city:                     '',
+  address:                  '',
   password:                 '',
   password_confirmation:    '',
   terms:                    '',
 })
+
+const cities = ['Cairo', 'Giza', 'Alexandria', 'Luxor', 'Aswan', 'Hurghada', 'Sharm El-Sheikh', 'Mansoura', 'Tanta', 'Zagazig', 'Port Said', 'Suez', 'Ismailia', 'Damietta', 'Asyut', 'Fayoum', 'Minya', 'Beni Suef', 'Qena', 'Sohag']
 
 const perks = [
   'Free to list products',
@@ -242,7 +287,14 @@ function validate() {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { errors.email = 'Enter a full email'; valid = false }
 
   if (!form.phone)             { errors.phone = 'Phone number is required'; valid = false }
-  else if (!/^\d{7,15}$/.test(form.phone)) { errors.phone = 'Enter a valid phone number'; valid = false }
+  else if (!/^\d{10}$/.test(form.phone)) { errors.phone = 'Phone must be exactly 10 digits'; valid = false }
+
+  if (!form.national_id)       { errors.national_id = 'National ID is required'; valid = false }
+  else if (!/^\d{14}$/.test(form.national_id)) { errors.national_id = 'National ID must be exactly 14 digits'; valid = false }
+
+  if (!form.city)              { errors.city = 'City is required'; valid = false }
+
+  if (!form.address.trim())    { errors.address = 'Address is required'; valid = false }
 
   if (!form.password)          { errors.password = 'Password is required'; valid = false }
   else if (form.password.length < 8) { errors.password = 'Minimum 8 characters'; valid = false }

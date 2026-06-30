@@ -9,12 +9,10 @@
             <p class="text-muted mb-0" style="font-size:.9rem;">{{ auth.user?.email }}</p>
             <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
               <span class="badge badge-gold">{{ auth.user?.role || 'User' }}</span>
-              <span v-if="auth.user?.email_verified_at" class="badge" style="background:rgba(46,204,113,.15);color:#2ecc71;border:1px solid rgba(46,204,113,.3);font-size:.72rem;">
-                <i class="bi bi-shield-check me-1"></i>Verified
+              <span v-if="auth.user?.national_id" class="badge bg-secondary" style="font-size:.72rem;" title="National ID (locked)">
+                <i class="bi bi-person-vcard me-1"></i>ID ••••{{ String(auth.user.national_id).slice(-4) }}
               </span>
-              <span v-else class="badge" style="background:rgba(231,76,60,.12);color:#e74c3c;border:1px solid rgba(231,76,60,.3);font-size:.72rem;">
-                <i class="bi bi-exclamation-circle me-1"></i>Unverified
-              </span>
+              <TrustBadge :user="auth.user" />
             </div>
           </div>
         </div>
@@ -63,24 +61,57 @@
               <i class="bi bi-plus me-1"></i>New Listing
             </RouterLink>
           </div>
+
+          <!-- Wallet + workspaces -->
+          <div class="card p-3 mt-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="text-muted" style="font-size:.8rem;">Wallet balance</span>
+              <span class="text-gold fw-700">EGP {{ Number(auth.user?.wallet_balance || 0).toLocaleString() }}</span>
+            </div>
+            <RouterLink to="/wallet" class="btn btn-outline-gold btn-sm w-100 mb-1"><i class="bi bi-wallet2 me-1"></i>My Wallet</RouterLink>
+            <RouterLink to="/offers" class="btn btn-outline-gold btn-sm w-100 mb-1"><i class="bi bi-tag me-1"></i>Offers</RouterLink>
+            <RouterLink to="/seller/sales" class="btn btn-outline-gold btn-sm w-100"><i class="bi bi-graph-up-arrow me-1"></i>My Sales</RouterLink>
+          </div>
         </div>
 
         <!-- Content -->
         <div class="col-lg-9">
 
+          <!-- First-2-sales-free promo -->
+          <div v-if="(auth.user?.free_sales_remaining || 0) > 0" class="alert py-2 px-3 mb-3 d-flex align-items-center gap-2"
+            style="background:rgba(201,169,110,.1);border:1px solid rgba(201,169,110,.3);font-size:.85rem;color:var(--gold);">
+            <i class="bi bi-stars"></i>
+            <span>Your first 2 sales are fee-free — <strong>{{ auth.user.free_sales_remaining }} left</strong></span>
+          </div>
+
           <!-- ── Profile info ───────────────────────────────────── -->
           <div v-if="activeTab === 'profile'" class="card p-4">
             <h5 class="text-cream mb-4"><i class="bi bi-person me-2 text-gold"></i>Personal Information</h5>
 
-            <div class="alert py-2 px-3 mb-3" style="background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.25);font-size:.88rem;" v-if="profileSuccess">
-              <i class="bi bi-check-circle me-2"></i>Profile updated successfully!
+            <!-- Read-only account summary -->
+            <div class="row g-2 mb-4">
+              <div class="col-md-4">
+                <div style="background:var(--navy-light);border-radius:.7rem;padding:.7rem .9rem;">
+                  <div class="text-muted" style="font-size:.72rem;">National ID <i class="bi bi-lock-fill"></i></div>
+                  <div class="text-cream fw-600" style="font-size:.9rem;">{{ auth.user?.national_id || '—' }}</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div style="background:var(--navy-light);border-radius:.7rem;padding:.7rem .9rem;">
+                  <div class="text-muted" style="font-size:.72rem;">Wallet balance</div>
+                  <div class="text-gold fw-700" style="font-size:.9rem;">EGP {{ Number(auth.user?.wallet_balance || 0).toLocaleString() }}</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div style="background:var(--navy-light);border-radius:.7rem;padding:.7rem .9rem;">
+                  <div class="text-muted" style="font-size:.72rem;">Member since</div>
+                  <div class="text-cream fw-600" style="font-size:.9rem;">{{ formatDate(auth.user?.created_at) || '—' }}</div>
+                </div>
+              </div>
             </div>
 
-            <!-- Verification banner -->
-            <div v-if="!auth.user?.email_verified_at" class="alert py-2 px-3 mb-4" style="background:rgba(243,156,18,.1);border:1px solid rgba(243,156,18,.25);border-radius:.6rem;font-size:.85rem;">
-              <i class="bi bi-envelope-exclamation me-2"></i>
-              Your email is not verified.
-              <RouterLink to="/verify-email" class="text-gold ms-2 text-decoration-none fw-600">Verify now →</RouterLink>
+            <div class="alert py-2 px-3 mb-3" style="background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.25);font-size:.88rem;" v-if="profileSuccess">
+              <i class="bi bi-check-circle me-2"></i>Profile updated successfully!
             </div>
 
             <form @submit.prevent="saveProfile" novalidate>
@@ -90,8 +121,9 @@
                   <input class="form-control" v-model="profileForm.name" placeholder="Your full name" />
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Email</label>
-                  <input class="form-control" type="email" v-model="profileForm.email" />
+                  <label class="form-label">Email <i class="bi bi-lock-fill text-muted" style="font-size:.72rem;"></i></label>
+                  <input class="form-control" type="email" :value="auth.user?.email" disabled readonly
+                    title="Your email cannot be changed" style="opacity:.7;cursor:not-allowed;" />
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Phone</label>
@@ -146,21 +178,34 @@
               <div
                 class="card p-3 card-hover"
                 v-for="order in orders"
-                :key="order.id"
-                @click="$router.push({ name: 'OrderDetail', params: { id: order.id } })"
+                :key="order.order_id || order.id"
+                @click="$router.push({ name: 'OrderDetail', params: { id: order.order_id || order.id } })"
                 style="cursor:pointer;"
               >
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                   <div>
-                    <div class="text-cream fw-600">#{{ order.id }}</div>
+                    <div class="text-cream fw-600">#{{ order.order_id || order.id }} · {{ order.product?.name || 'Order' }}</div>
                     <div class="text-muted" style="font-size:.82rem;">{{ formatDate(order.created_at) }}</div>
                   </div>
                   <div class="text-end">
-                    <div class="text-gold fw-700">{{ formatPrice(order.total) }}</div>
+                    <div class="text-gold fw-700">{{ formatPrice(order.total_price ?? order.total) }}</div>
                     <span class="badge" :class="statusBadge(order.status)">{{ order.status }}</span>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- ── Offers ──────────────────────────────────────────── -->
+          <div v-if="activeTab === 'offers'">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="text-cream mb-0"><i class="bi bi-tag me-2 text-gold"></i>My Offers</h5>
+              <RouterLink class="btn btn-outline-gold btn-sm" to="/offers">View All</RouterLink>
+            </div>
+            <div class="card p-5 text-center">
+              <i class="bi bi-tag text-gold" style="font-size:2.5rem;"></i>
+              <p class="text-muted mt-3 mb-3">Offers you've made and offers received on your listings.</p>
+              <RouterLink class="btn btn-gold btn-sm" to="/offers">Open Offers</RouterLink>
             </div>
           </div>
 
@@ -292,6 +337,7 @@ import { userService, paymentService } from '@/services/api'
 import { useToast } from 'vue-toastification'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProductCard from '@/components/ui/ProductCard.vue'
+import TrustBadge from '@/components/ui/TrustBadge.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -312,8 +358,8 @@ const wishlistLoading = ref(false)
 const tabs = [
   { key: 'profile',       label: 'Profile',       icon: 'bi bi-person' },
   { key: 'orders',        label: 'Orders',        icon: 'bi bi-bag' },
+  { key: 'offers',        label: 'Offers',        icon: 'bi bi-tag' },
   { key: 'rentals',       label: 'Rentals',       icon: 'bi bi-clock-history' },
-  { key: 'payments',      label: 'Payments',      icon: 'bi bi-credit-card' },
   { key: 'wishlist',      label: 'Wishlist',      icon: 'bi bi-heart' },
   { key: 'notifications', label: 'Notifications', icon: 'bi bi-bell' },
 ]
@@ -340,9 +386,9 @@ function statusBadge(s) {
 }
 
 async function saveProfile() {
+  // Email is locked — never sent in the update.
   const payload = {
     name: profileForm.name,
-    email: profileForm.email,
     phone: profileForm.phone,
     city: profileForm.city,
     address: profileForm.address,

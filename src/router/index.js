@@ -29,15 +29,20 @@ const routes = [
   { path: '/wishlist',    name: 'Wishlist',    component: () => import('@/views/WishlistView.vue'),                       meta: { requiresAuth: true } },
   { path: '/profile',     name: 'Profile',     component: () => import('@/views/profile/ProfileView.vue'),                meta: { requiresAuth: true } },
   { path: '/payments',    name: 'Payments',    component: () => import('@/views/payments/PaymentsView.vue'),              meta: { requiresAuth: true } },
+  { path: '/wallet',      name: 'Wallet',      component: () => import('@/views/wallet/WalletView.vue'),                  meta: { requiresAuth: true } },
+  { path: '/offers',      name: 'Offers',      component: () => import('@/views/offers/OffersView.vue'),                  meta: { requiresAuth: true } },
 
   // ── Seller ────────────────────────────────────────────────────────
   { path: '/seller',                   name: 'SellerDashboard', component: () => import('@/views/seller/SellerDashboardView.vue'), meta: { requiresAuth: true } },
+  { path: '/seller/sales',             name: 'MySales',         component: () => import('@/views/seller/MySalesView.vue'),         meta: { requiresAuth: true } },
   { path: '/seller/products/new',      name: 'CreateProduct',   component: () => import('@/views/seller/CreateProductView.vue'),   meta: { requiresAuth: true } },
   { path: '/seller/products/:id/edit', name: 'EditProduct',     component: () => import('@/views/seller/EditProductView.vue'),     meta: { requiresAuth: true } },
 
   // ── Admin ─────────────────────────────────────────────────────────
-  { path: '/admin',       name: 'Admin',       component: () => import('@/views/admin/AdminDashboardView.vue'),  meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/users', name: 'AdminUsers',  component: () => import('@/views/admin/UsersManagementView.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/admin',          name: 'Admin',         component: () => import('@/views/admin/AdminDashboardView.vue'),  meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/admin/products', name: 'AdminProducts', component: () => import('@/views/admin/AdminProductsView.vue'),   meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/admin/orders',   name: 'AdminOrders',   component: () => import('@/views/admin/AdminOrdersView.vue'),     meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/admin/users',    name: 'AdminUsers',    component: () => import('@/views/admin/UsersManagementView.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/admin/logs',  name: 'AdminLogs',   component: () => import('@/views/admin/LogsView.vue'),           meta: { requiresAuth: true, requiresAdmin: true } },
 
   // ── 404 ───────────────────────────────────────────────────────────

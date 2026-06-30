@@ -124,6 +124,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { productService } from '@/services/api'
+import { aiSearch } from '@/services/ai'
+import { unwrapList } from '@/utils/helpers'
 import ProductCard from '@/components/ui/ProductCard.vue'
 import ProductSkeleton from '@/components/ui/ProductSkeleton.vue'
 import Pagination from '@/components/ui/Pagination.vue'
@@ -173,21 +175,49 @@ async function doSearch() {
   await fetchPage(1)
 }
 
+// AI search returns one ranked list; cache it and paginate/sort client-side.
+let aiCache = []
+let lastAiQuery = ''
+const PER = 12
+
+function sortList(list, by) {
+  const a = [...list]
+  if (by === 'price_asc') a.sort((x, y) => (x.price || 0) - (y.price || 0))
+  else if (by === 'price_desc') a.sort((x, y) => (y.price || 0) - (x.price || 0))
+  else if (by === 'newest') a.sort((x, y) => new Date(y.created_at || 0) - new Date(x.created_at || 0))
+  else if (by === 'rating') a.sort((x, y) => (Number(y.rate ?? y.rating ?? 0)) - (Number(x.rate ?? x.rating ?? 0)))
+  return a // '' = relevance → keep AI order
+}
+
 async function fetchPage(page = 1) {
   loading.value = true
   currentPage.value = page
+  const q = (lastQuery.value || query.value || '').trim()
   try {
-    const params = {
-      search: lastQuery.value || query.value,
-      page,
-      per_page: 12,
-      sort: sortBy.value || undefined,
-      category: categoryFilter.value || undefined,
+    // 1) AI semantic search (only re-fetch when the query text changes).
+    if (q && q !== lastAiQuery) {
+      aiCache = (await aiSearch(q, 48)) || []
+      lastAiQuery = q
     }
-    const res = await productService.getAll(params)
-    results.value = res.data?.data || res.data || []
-    total.value = res.data?.total || results.value.length
-    totalPages.value = res.data?.last_page || 1
+
+    if (aiCache.length) {
+      let list = aiCache
+      if (categoryFilter.value) list = list.filter(p => p.category?.name === categoryFilter.value)
+      list = sortList(list, sortBy.value)
+      total.value = list.length
+      totalPages.value = Math.max(1, Math.ceil(list.length / PER))
+      results.value = list.slice((page - 1) * PER, page * PER)
+    } else {
+      // 2) Fallback: backend keyword (LIKE) search.
+      const res = await productService.getAll({
+        search: q, page, per_page: PER,
+        sort: sortBy.value || undefined,
+        category: categoryFilter.value || undefined,
+      })
+      results.value = unwrapList(res)
+      total.value = res.data?.total || results.value.length
+      totalPages.value = res.data?.last_page || 1
+    }
     if (results.value.length === 0) await loadFallback()
   } catch (_) { results.value = [] } finally { loading.value = false }
 }
@@ -205,6 +235,8 @@ function clearSearch() {
   suggestions.value = []
   searched.value = false
   lastQuery.value = ''
+  aiCache = []
+  lastAiQuery = ''
   router.replace({ name: 'Search' })
   inputRef.value?.focus()
 }

@@ -20,7 +20,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated   = computed(() => !!token.value)
   const isAdmin           = computed(() => user.value?.role === 'admin')
-  const isSeller          = computed(() => user.value?.role === 'seller' || user.value?.role === 'admin')
+  // This is a C2C marketplace — every signed-in user can sell.
+  const isSeller          = computed(() => isAuthenticated.value)
   const needsVerification = computed(() => isAuthenticated.value && !user.value?.email_verified_at)
   const fullName          = computed(() => user.value?.name || '')
   const emailVerified     = computed(() => !!user.value?.email_verified_at)
@@ -69,6 +70,19 @@ export const useAuthStore = defineStore('auth', () => {
       const { userData, tokenData } = extractAuth(res.data)
       if (!userData || !tokenData) throw new Error('Invalid response from server')
       setAuth(userData, tokenData)
+      // The backend register() only stores name/email/password/phone/national_id,
+      // so persist city/address via the (working) profile update — same approach
+      // the Flutter app uses. Non-fatal: the account is already created.
+      if (data.city || data.address) {
+        try {
+          const { userService } = await import('@/services/api')
+          const r = await userService.update(userData.id, {
+            name: data.name, phone: data.phone, city: data.city, address: data.address,
+          })
+          const updated = r.data?.user || r.data?.data || r.data
+          if (updated?.id) { user.value = updated; localStorage.setItem('tasleem_user', JSON.stringify(updated)) }
+        } catch (_) { /* keep going — register succeeded */ }
+      }
       return { success: true }
     } catch (err) {
       return { success: false, message: err.response?.data?.message || 'Registration failed', errors: err.response?.data?.errors || {} }
@@ -85,10 +99,19 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchMe() {
     try {
       const res  = await authService.me()
-      const userData = res.data?.user || res.data
-      user.value = userData
-      localStorage.setItem('tasleem_user', JSON.stringify(userData))
-    } catch (_) { clearAuth() }
+      const userData = res.data?.user || res.data?.data || res.data
+      if (userData && userData.id) {
+        user.value = userData
+        localStorage.setItem('tasleem_user', JSON.stringify(userData))
+      }
+    } catch (err) {
+      // Only log out if the token is genuinely rejected. A network error,
+      // timeout, or 5xx (e.g. the backend cold-starting) must NOT wipe the
+      // session — keep the cached user/token from localStorage so a refresh
+      // doesn't sign the user out.
+      const status = err?.response?.status
+      if (status === 401 || status === 403) clearAuth()
+    }
   }
 
   async function updateProfile(data) {

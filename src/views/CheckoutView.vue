@@ -55,10 +55,11 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">City</label>
-                  <select class="form-select" v-model="shipping.city">
+                  <select class="form-select" v-model="shipping.city" :class="{ 'is-invalid': shippingErrors.city }">
                     <option value="">Select city</option>
                     <option v-for="c in cities" :key="c" :value="c">{{ c }}</option>
                   </select>
+                  <div class="invalid-feedback">{{ shippingErrors.city }}</div>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Postal Code</label>
@@ -164,6 +165,10 @@
             </div>
             <h3 class="text-cream mb-2">Order Placed! 🎉</h3>
             <p class="text-muted mb-1">Your order #{{ orderId }} has been confirmed.</p>
+            <div class="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-xl mb-3" style="background:rgba(201,169,110,.1);border:1px solid rgba(201,169,110,.25);">
+              <i class="bi bi-truck text-gold"></i>
+              <span class="text-cream" style="font-size:.9rem;">Estimated delivery within <strong>3–5 business days</strong></span>
+            </div>
             <p class="text-muted mb-4">You'll receive a confirmation email at {{ shipping.email }}</p>
             <div class="d-flex justify-content-center gap-3">
               <RouterLink class="btn btn-gold" to="/orders">Track Order</RouterLink>
@@ -183,7 +188,12 @@
                 </div>
                 <div class="flex-grow-1 min-w-0">
                   <div class="text-cream text-truncate" style="font-size:.85rem;">{{ item.name || item.product?.name }}</div>
-                  <div class="text-muted" style="font-size:.75rem;">Qty: {{ item.quantity || 1 }}</div>
+                  <div class="d-flex align-items-center gap-2" style="font-size:.75rem;">
+                    <span class="text-muted">Qty: {{ item.quantity || 1 }}</span>
+                    <span class="badge" :class="isAdminOwned(item.product) ? 'badge-gold' : 'bg-info text-dark'" style="font-size:.58rem;">
+                      {{ isAdminOwned(item.product) ? 'Tasleem' : 'Marketplace' }}
+                    </span>
+                  </div>
                 </div>
                 <div class="text-gold" style="font-size:.9rem; font-weight:600; flex-shrink:0;">{{ formatPrice((item.price || 0) * (item.quantity || 1)) }}</div>
               </div>
@@ -194,12 +204,12 @@
               <span class="text-cream">{{ formatPrice(cart.totalPrice) }}</span>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">Shipping</span>
-              <span class="text-cream">{{ formatPrice(50) }}</span>
+              <span class="text-muted">Delivery ({{ cart.items.length }} × {{ formatPrice(DELIVERY) }})</span>
+              <span class="text-cream">{{ formatPrice(deliveryTotal) }}</span>
             </div>
             <div class="d-flex justify-content-between">
               <span class="text-cream fw-700">Total</span>
-              <span class="text-gold fw-700 fs-5">{{ formatPrice(cart.totalPrice + 50) }}</span>
+              <span class="text-gold fw-700 fs-5">{{ formatPrice(cart.totalPrice + deliveryTotal) }}</span>
             </div>
           </div>
         </div>
@@ -209,11 +219,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { orderService, paymentService } from '@/services/api'
+import { isAdminOwned } from '@/utils/helpers'
 import { useToast } from 'vue-toastification'
 
 const router = useRouter()
@@ -230,21 +241,22 @@ const shipping = reactive({
   name: auth.user?.name || '',
   email: auth.user?.email || '',
   phone: auth.user?.phone || '',
-  address: '',
-  city: '',
-  postal_code: ''
+  address: auth.user?.address || '',   // prefilled from the account
+  city: auth.user?.city || '',         // prefilled from the account
+  postal_code: auth.user?.post_code || ''
 })
-const shippingErrors = reactive({ name: '', email: '', phone: '', address: '' })
+const shippingErrors = reactive({ name: '', email: '', phone: '', address: '', city: '' })
 
 const payment = reactive({ method: 'cash', card_number: '', expiry: '', cvv: '' })
 
 const cities = ['Cairo', 'Giza', 'Alexandria', 'Luxor', 'Aswan', 'Hurghada', 'Sharm El-Sheikh', 'Mansoura', 'Tanta', 'Zagazig']
 
+const DELIVERY = 30
+const deliveryTotal = computed(() => (cart.items?.length || 0) * DELIVERY)
+
 const paymentMethods = [
+  { value: 'wallet', label: 'Wallet', icon: 'bi bi-wallet2', desc: `Balance: ${formatPrice(auth.user?.wallet_balance || 0)} — held in escrow` },
   { value: 'cash', label: 'Cash on Delivery', icon: 'bi bi-cash-stack', desc: 'Pay when you receive your order' },
-  { value: 'card', label: 'Credit / Debit Card', icon: 'bi bi-credit-card', desc: 'Visa, Mastercard, etc.' },
-  { value: 'vodafone_cash', label: 'Vodafone Cash', icon: 'bi bi-phone', desc: 'Pay via mobile wallet' },
-  { value: 'instapay', label: 'InstaPay', icon: 'bi bi-lightning', desc: 'Instant bank transfer' }
 ]
 
 function formatPrice(v) {
@@ -268,6 +280,7 @@ function validateShipping() {
   if (!shipping.email) { shippingErrors.email = 'Required'; valid = false }
   if (!shipping.phone) { shippingErrors.phone = 'Required'; valid = false }
   if (!shipping.address.trim()) { shippingErrors.address = 'Required'; valid = false }
+  if (!shipping.city) { shippingErrors.city = 'Required'; valid = false }
   return valid
 }
 
@@ -281,22 +294,28 @@ function nextStep() {
 async function placeOrder() {
   loading.value = true
   try {
-    const orderPayload = {
-      items: cart.items.map(i => ({ product_id: i.product_id || i.id, quantity: i.quantity || 1 })),
-      shipping_address: `${shipping.address}, ${shipping.city}`,
-      payment_method: payment.method
-    }
-    const orderRes = await orderService.create(orderPayload)
-    const order = orderRes.data?.data || orderRes.data
-    orderId.value = order?.id || 'ORD-' + Date.now()
+    // Orders deliver to the buyer's stored address — persist what they entered
+    // so the seller/admin see the right delivery details (best-effort).
+    try { await auth.updateProfile({ address: shipping.address, city: shipping.city, phone: shipping.phone }) } catch (_) {}
 
-    if (payment.method !== 'cash') {
-      await paymentService.create({
-        order_id: orderId.value,
-        amount: cart.totalPrice + 50,
-        payment_method: payment.method
+    const me = auth.user?.id
+    let lastOrderId = null
+    // Each item is placed as its own escrow order (matches the backend model).
+    for (const i of cart.items) {
+      const pid = i.product_id || i.product?.id || i.id
+      const qty = i.quantity || 1
+      const price = Number(i.price ?? i.product?.price ?? 0)
+      const res = await orderService.create({
+        user_id: me,
+        product_id: pid,
+        quantity: qty,
+        unit_price: price,
+        payment_method: payment.method, // 'wallet' (escrow hold) | 'cash' (COD)
       })
+      const order = res.data?.data || res.data
+      lastOrderId = order?.order_id || order?.id || lastOrderId
     }
+    orderId.value = lastOrderId || 'ORD-' + Date.now()
 
     await cart.clearCart()
     step.value = 4

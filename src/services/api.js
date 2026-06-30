@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useToast } from 'vue-toastification'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL /* || 'http://127.0.0.1:8000/api/v1' */,
@@ -16,16 +17,27 @@ api.interceptors.request.use(
   err => Promise.reject(err)
 )
 
-// ── Handle 401 globally ───────────────────────────────────────
+// ── Handle 401 (auth) + 429 (rate limit / WAF throttle) globally ──
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    const status = err.response?.status
+    if (status === 401) {
       localStorage.removeItem('tasleem_token')
       localStorage.removeItem('tasleem_user')
       if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
+    } else if (status === 429) {
+      // Too Many Requests — Laravel throttle / WAF rate limit. Surface a
+      // friendly message + the server's Retry-After when present.
+      const retry = err.response?.headers?.['retry-after']
+      const msg = err.response?.data?.message ||
+        `Too many requests — please slow down${retry ? ` and try again in ${retry}s` : ''}.`
+      try { useToast().warning(msg) } catch (_) { /* toast not ready */ }
+    } else if (status === 403 && /blocked|forbidden|firewall|waf/i.test(err.response?.data?.message || '')) {
+      // A WAF/firewall block surfaced as 403 with a relevant message.
+      try { useToast().error(err.response.data.message) } catch (_) {}
     }
     return Promise.reject(err)
   }
@@ -76,16 +88,18 @@ export const userService = {
 // GET    /products/{id}/similar  ← new endpoint
 // ─────────────────────────────────────────────────────────────
 export const productService = {
-  getAll:   params     => api.get('/products', { params }),
+  // `config` lets callers override e.g. timeout for slower large-page fetches.
+  getAll:   (params, config = {}) => api.get('/products', { params, ...config }),
   getById:  id         => api.get(`/products/${id}`),
   similar:  id         => api.get(`/products/${id}/similar`),
-  create:   data       => api.post('/products', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
+  // Create as JSON; images are uploaded separately via imageService (2-step).
+  create:   data       => api.post('/products', data),
   // ✅ Fixed: was POST (with _method=PUT hack) → now real PUT
   update:   (id, data) => api.put(`/products/${id}`, data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  // JSON field update (admin edit price / add stock). Backend requires `status`.
+  updateFields: (id, data) => api.put(`/products/${id}`, data),
   delete:   id         => api.delete(`/products/${id}`),
 }
 
@@ -108,8 +122,11 @@ export const orderService = {
   getById: id         => api.get(`/orders/${id}`),
   create:  data       => api.post('/orders', data),
   update:  (id, data) => api.put(`/orders/${id}`, data),
-  cancel:  id         => api.put(`/orders/${id}`, { status: 'cancelled' }),
   delete:  id         => api.delete(`/orders/${id}`),
+  // ── C2C escrow actions (buyer → seller → admin) ──
+  sellerConfirm: id   => api.post(`/orders/${id}/seller-confirm`), // seller accepts
+  complete:      id   => api.post(`/orders/${id}/complete`),       // admin: release payout
+  cancel:        id   => api.post(`/orders/${id}/cancel`),         // refund + relist
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -119,6 +136,7 @@ export const rentalService = {
   getAll:  params     => api.get('/rentals', { params }),
   getById: id         => api.get(`/rentals/${id}`),
   create:  data       => api.post('/rentals', data),
+  confirm: id         => api.post(`/rentals/${id}/confirm`), // owner accepts the request
   update:  (id, data) => api.put(`/rentals/${id}`, data),
   return:  id         => api.put(`/rentals/${id}`, { status: 'returned' }),
   delete:  id         => api.delete(`/rentals/${id}`),
@@ -174,7 +192,7 @@ export const cartService = {
 // DELETE /wishlist/clear/{userId} ← ✅ Fixed: was DELETE /wishlist
 // ─────────────────────────────────────────────────────────────
 export const wishlistService = {
-  getAll: ()         => api.get('/wishlist'),
+  getAll: (params)   => api.get('/wishlist', { params }),
   add:    data       => api.post('/wishlist', data),
   // ✅ Fixed: was /wishlist/check/{id} → now query param
   check:  productId  => api.get('/wishlist/check', { params: { product_id: productId } }),
@@ -237,30 +255,83 @@ export const logService = {
 }
 
 // ─────────────────────────────────────────────────────────────
-// NOTIFICATIONS  ← ⚠️ NOT in backend
-// Stubbed out so the notification store doesn't crash.
-// Returns empty data instead of throwing network errors.
+// NOTIFICATIONS  — now LIVE in the backend.
+// GET /notifications  → { notifications: [...], unread_count }
 // ─────────────────────────────────────────────────────────────
 export const notificationService = {
-  getAll:       () => Promise.resolve({ data: { data: [], unread_count: 0 } }),
-  markRead:     () => Promise.resolve({ data: { message: 'ok' } }),
-  markAllRead:  () => Promise.resolve({ data: { message: 'ok' } }),
-  getUnreadCount: () => Promise.resolve({ data: { unread_count: 0 } }),
+  getAll:         () => api.get('/notifications'),
+  markRead:       id => api.post(`/notifications/${id}/read`),
+  markAllRead:    () => api.post('/notifications/read-all'),
+  getUnreadCount: () => api.get('/notifications'),
+}
+
+// ─────────────────────────────────────────────────────────────
+// WALLET (simulated C2C escrow wallet)
+// GET  /wallet         → { balance, transactions: [...] }
+// POST /wallet/topup   { amount }
+// ─────────────────────────────────────────────────────────────
+export const walletService = {
+  get:   ()       => api.get('/wallet'),
+  topup: amount   => api.post('/wallet/topup', { amount }),
+}
+
+// ─────────────────────────────────────────────────────────────
+// OFFERS — buyer makes an offer on a C2C listing; seller accepts/rejects.
+// GET  /offers?seller_id= | ?buyer_id=
+// POST /offers              { product_id, amount, payment_method }
+// POST /offers/{id}/accept  → creates the order
+// POST /offers/{id}/reject
+// ─────────────────────────────────────────────────────────────
+export const offerService = {
+  received: sellerId => api.get('/offers', { params: { seller_id: sellerId } }),
+  sent:     buyerId  => api.get('/offers', { params: { buyer_id: buyerId } }),
+  make:     data     => api.post('/offers', data),
+  accept:   id       => api.post(`/offers/${id}/accept`),
+  reject:   id       => api.post(`/offers/${id}/reject`),
+}
+
+// ─────────────────────────────────────────────────────────────
+// BOOST — seller pays to float a listing to the top.
+// POST /products/{id}/boost  { days }
+// ─────────────────────────────────────────────────────────────
+export const boostService = {
+  boost: (productId, days) => api.post(`/products/${productId}/boost`, { days }),
+}
+
+// ─────────────────────────────────────────────────────────────
+// ADMIN — exact dashboard figures in one call.
+// GET /admin/stats → { products, orders, rentals, revenue, users }
+// ─────────────────────────────────────────────────────────────
+export const adminService = {
+  stats: () => api.get('/admin/stats'),
 }
 
 // ─────────────────────────────────────────────────────────────────
 // AI  — personalized recommendations, trending, search, assistant
 // ─────────────────────────────────────────────────────────────────
+// The AI microservice (FastAPI) is a SEPARATE host from Laravel. Sentiment
+// returns full data (not IDs), so we call it directly. CORS is open.
+const AI_BASE = import.meta.env.VITE_AI_BASE_URL || 'https://tasleem-ai-service-production-3dc3.up.railway.app'
+
+// All AI endpoints return ID lists (except sentiment/bundle), e.g. {ids:[…]}.
+// They live on the FastAPI service, NOT Laravel — call it directly (CORS open).
+const aiGet = (path, params) => axios.get(`${AI_BASE}${path}`, { params, timeout: 12000 })
 export const aiService = {
-  // Personalized recs for logged-in user (auth required)
-  forUser:    (lastProductId = null) => api.get('/recommendations', lastProductId ? { params: { last_product_id: lastProductId } } : {}),
-  // Public sections
-  trending:   ()                     => api.get('/ai/trending'),
-  explore:    ()                     => api.get('/ai/explore'),
-  // Auth required
-  similar:    productId              => api.get(`/ai/similar/${productId}`),
-  search:     q                      => api.get('/ai/search', { params: { q } }),
-  assistant:  query                  => api.get('/ai/assistant', { params: { query } }),
+  trending:   (k = 8)               => aiGet('/trending', { k }),
+  explore:    (k = 8)               => aiGet('/explore', { k }),
+  similar:    (productId, k = 8)    => aiGet(`/similar/${productId}`, { k }),
+  recommend:  (userId, k = 8, lastProductId = null) =>
+                aiGet(`/recommend/user/${userId}`, lastProductId ? { k, last_product_id: lastProductId } : { k }),
+  bundle:     (productId, k = 4)    => aiGet(`/bundle/${productId}`, { k }),
+  search:     (q, k = 30)           => aiGet('/search', { q, k }),
+  assistant:  (query, k = 8)        => aiGet('/search', { q: query, k }),
+  reviewSentiment: productId        => aiGet(`/reviews/summary/${productId}`),
+  // Listing-photo gate: is this image an electronic product?
+  detectElectronic: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return axios.post(`${AI_BASE}/detect/electronic`, fd, { timeout: 20000 })
+  },
 }
 
 // Keep old recommendationService as alias so nothing breaks

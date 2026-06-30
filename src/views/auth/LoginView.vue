@@ -118,8 +118,8 @@ const cart     = useCartStore()
 const wishlist = useWishlistStore()
 const toast    = useToast()
 
-// Initialize lockout (3 attempts, 60 seconds)
-const { isLockedOut, countdown, recordFailure, recordSuccess } = useAuthLockout(3, 60)
+// Initialize lockout (5 attempts → 60 seconds, matching the Flutter app)
+const { isLockedOut, countdown, recordFailure, recordSuccess } = useAuthLockout(5, 60)
 
 const form    = reactive({ email: '', password: '' })
 const errors  = reactive({ email: '', password: '' })

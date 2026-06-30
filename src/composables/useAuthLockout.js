@@ -1,93 +1,69 @@
 // src/composables/useAuthLockout.js
 import { ref, onMounted, onUnmounted } from 'vue';
 
-export function useAuthLockout(maxAttempts = 3, lockoutSeconds = 60) {
+// Escalating delay by failed-attempt count: 1st none, 2nd 10s, 3rd 20s, 4th 30s, 5th+ 60s.
+function delayForAttempt(n) {
+  if (n <= 1) return 0;
+  if (n >= 5) return 60;
+  return (n - 1) * 10; // 2->10, 3->20, 4->30
+}
+
+export function useAuthLockout() {
   const failedAttempts = ref(0);
   const isLockedOut = ref(false);
   const countdown = ref(0);
-  
+
   let timerInterval = null;
-  const STORAGE_KEY = 'tasleem_auth_lockout_time';
+  const KEY_UNTIL = 'tasleem_auth_lockout_time';
+  const KEY_COUNT = 'tasleem_auth_fail_count';
 
-  // Function to clear the lockout state
-  const clearLockout = () => {
-    isLockedOut.value = false;
-    countdown.value = 0;
-    failedAttempts.value = 0;
-    localStorage.removeItem(STORAGE_KEY);
-    
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
-  };
+  const stopTimer = () => { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } };
 
-  // Function to start the 60s countdown
-  const startLockout = () => {
-    isLockedOut.value = true;
-    countdown.value = lockoutSeconds;
-    
-    // Save the exact end time to localStorage
-    const lockoutEndTime = Date.now() + (lockoutSeconds * 1000);
-    localStorage.setItem(STORAGE_KEY, lockoutEndTime.toString());
+  // End the current wait, but keep the failure count so the next failure escalates.
+  const endLockout = () => { isLockedOut.value = false; countdown.value = 0; localStorage.removeItem(KEY_UNTIL); stopTimer(); };
 
-    // Start the countdown timer
+  const tick = () => {
     timerInterval = setInterval(() => {
       countdown.value--;
-      if (countdown.value <= 0) {
-        clearLockout();
-      }
+      if (countdown.value <= 0) endLockout();
     }, 1000);
   };
 
-  // Call this when an API call fails (e.g., 401 Unauthorized)
+  const startLockout = (seconds) => {
+    isLockedOut.value = true;
+    countdown.value = seconds;
+    localStorage.setItem(KEY_UNTIL, (Date.now() + seconds * 1000).toString());
+    stopTimer();
+    tick();
+  };
+
+  // Call on a failed login.
   const recordFailure = () => {
     failedAttempts.value++;
-    if (failedAttempts.value >= maxAttempts) {
-      startLockout();
-    }
+    localStorage.setItem(KEY_COUNT, String(failedAttempts.value));
+    const delay = delayForAttempt(failedAttempts.value);
+    if (delay > 0) startLockout(delay); // 1st attempt: no lock
   };
 
-  // Call this when an API call succeeds
+  // Call on a successful login — full reset.
   const recordSuccess = () => {
-    clearLockout();
+    failedAttempts.value = 0;
+    localStorage.removeItem(KEY_COUNT);
+    endLockout();
   };
 
-  // Check on page load if the user is already locked out (prevents refresh bypass)
+  // Restore state after a refresh (resume countdown + keep escalation level).
   onMounted(() => {
-    const lockoutEndStr = localStorage.getItem(STORAGE_KEY);
-    if (lockoutEndStr) {
-      const lockoutEndTime = parseInt(lockoutEndStr, 10);
-      const now = Date.now();
-      
-      if (now < lockoutEndTime) {
-        isLockedOut.value = true;
-        failedAttempts.value = maxAttempts;
-        countdown.value = Math.ceil((lockoutEndTime - now) / 1000);
-        
-        timerInterval = setInterval(() => {
-          countdown.value--;
-          if (countdown.value <= 0) {
-            clearLockout();
-          }
-        }, 1000);
-      } else {
-        // Lockout expired while page was closed
-        localStorage.removeItem(STORAGE_KEY);
-      }
+    failedAttempts.value = parseInt(localStorage.getItem(KEY_COUNT) || '0', 10);
+    const untilStr = localStorage.getItem(KEY_UNTIL);
+    if (untilStr) {
+      const remain = Math.ceil((parseInt(untilStr, 10) - Date.now()) / 1000);
+      if (remain > 0) { isLockedOut.value = true; countdown.value = remain; tick(); }
+      else localStorage.removeItem(KEY_UNTIL);
     }
   });
 
-  // Clean up interval when component is destroyed
-  onUnmounted(() => {
-    if (timerInterval) clearInterval(timerInterval);
-  });
+  onUnmounted(stopTimer);
 
-  return {
-    failedAttempts,
-    isLockedOut,
-    countdown,
-    recordFailure,
-    recordSuccess
-  };
+  return { failedAttempts, isLockedOut, countdown, recordFailure, recordSuccess };
 }

@@ -54,6 +54,16 @@
                 <RouterLink v-if="rental.product?.id" :to="`/products/${rental.product.id}`" class="btn btn-sm btn-outline-gold">
                   <i class="bi bi-box-arrow-up-right me-1"></i>View Product
                 </RouterLink>
+                <!-- Owner accepts an incoming rental request -->
+                <button
+                  v-if="canAccept(rental)"
+                  class="btn btn-sm btn-gold"
+                  @click="acceptRequest(rental)"
+                  :disabled="acceptingId === rid(rental)"
+                >
+                  <span class="spinner-border spinner-border-sm me-1" v-if="acceptingId === rid(rental)"></span>
+                  <i class="bi bi-check-lg me-1" v-else></i>Accept Request
+                </button>
                 <!-- Return button: only for active rentals -->
                 <button
                   v-if="canReturn(rental.status)"
@@ -152,12 +162,16 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { rentalService } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
 import { Modal } from 'bootstrap'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import Pagination from '@/components/ui/Pagination.vue'
 
 const toast = useToast()
+const auth = useAuthStore()
+const meId = computed(() => auth.user?.id)
+const acceptingId = ref(null)
 const rentals = ref([])
 const loading = ref(true)
 const currentPage = ref(1)
@@ -179,8 +193,27 @@ const tabs = [
   { label: 'All', value: '' },
   { label: 'Active', value: 'active' },
   { label: 'Returned', value: 'returned' },
-  { label: 'Overdue', value: 'overdue' }
+  { label: 'Overdue', value: 'overdue' },
+  { label: 'Requests', value: 'requests' }
 ]
+
+// In the "Requests" tab the listed rentals are ones where I'm the owner and a
+// renter is waiting for me to accept.
+const rid = r => r.rental_id ?? r.id
+function isOwner(r) { return (r.product?.owner?.id ?? r.owner_id) === meId.value }
+function canAccept(r) { return r.status === 'pending' && isOwner(r) }
+
+async function acceptRequest(rental) {
+  const id = rid(rental)
+  acceptingId.value = id
+  try {
+    await rentalService.confirm(id)
+    rental.status = 'confirmed'
+    toast.success('Rental request accepted')
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Could not accept the request')
+  } finally { acceptingId.value = null }
+}
 
 const extendCost = computed(() => {
   if (!toExtend.value || !extendDate.value) return 0
@@ -246,10 +279,20 @@ async function fetchRentals(page = 1) {
   currentPage.value = page
   try {
     const params = { page, per_page: 10 }
-    if (activeTab.value) params.status = activeTab.value
-    const res = await rentalService.getAll(params)
-    rentals.value = res.data?.data || res.data || []
-    totalPages.value = res.data?.last_page || 1
+    if (activeTab.value === 'requests') {
+      // Incoming requests = rentals on items I own. The server may ignore
+      // owner_id, so keep only the ones I actually own as a safety net.
+      params.owner_id = meId.value
+      const res = await rentalService.getAll(params)
+      const all = res.data?.data || res.data || []
+      rentals.value = all.filter(isOwner)
+      totalPages.value = 1
+    } else {
+      if (activeTab.value) params.status = activeTab.value
+      const res = await rentalService.getAll(params)
+      rentals.value = res.data?.data || res.data || []
+      totalPages.value = res.data?.last_page || 1
+    }
   } catch (_) { rentals.value = [] } finally { loading.value = false }
 }
 

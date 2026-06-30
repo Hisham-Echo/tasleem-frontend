@@ -28,7 +28,6 @@
             <select v-model="filters.role" class="form-select form-select-sm" @change="fetchUsers(1)">
               <option value="">All Roles</option>
               <option value="admin">Admin</option>
-              <option value="seller">Seller</option>
               <option value="user">User</option>
             </select>
           </div>
@@ -52,9 +51,6 @@
       <div class="card p-0 overflow-hidden">
         <div class="card-header px-4 py-3 d-flex align-items-center justify-content-between">
           <span class="text-cream">{{ total }} user{{ total !== 1 ? 's' : '' }}</span>
-          <button class="btn btn-gold btn-sm" @click="showCreateModal = true">
-            <i class="bi bi-person-plus me-1"></i>Add User
-          </button>
         </div>
         <LoadingSpinner v-if="loading" height="200px" />
         <div class="table-responsive" v-else>
@@ -65,7 +61,7 @@
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Role</th>
-                <th>Verified</th>
+                <th>State</th>
                 <th>Joined</th>
                 <th>Actions</th>
               </tr>
@@ -81,6 +77,7 @@
                       {{ (user.name||'U')[0].toUpperCase() }}
                     </div>
                     <span class="text-cream" style="font-size:.88rem;">{{ user.name }}</span>
+                    <span v-if="String(user.status) === '0'" class="badge bg-danger" style="font-size:.58rem;">Inactive</span>
                   </div>
                 </td>
                 <td class="text-muted" style="font-size:.85rem;">{{ user.email }}</td>
@@ -88,16 +85,27 @@
                 <td>
                   <select class="form-select form-select-sm" style="width:110px;background:var(--navy-light);" :value="user.role" @change="updateRole(user, $event.target.value)">
                     <option value="user">User</option>
-                    <option value="seller">Seller</option>
                     <option value="admin">Admin</option>
                   </select>
                 </td>
                 <td>
-                  <i class="bi" :class="user.email_verified_at ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-danger'"></i>
+                  <span v-if="stateOf(user)" class="badge" :class="stateOf(user).cls" style="font-size:.62rem;">
+                    <i :class="stateOf(user).icon + ' me-1'"></i>{{ stateOf(user).label }}
+                  </span>
+                  <span v-else class="text-muted">—</span>
                 </td>
                 <td class="text-muted" style="font-size:.82rem;">{{ formatDate(user.created_at) }}</td>
                 <td>
                   <div class="d-flex gap-1">
+                    <button class="btn btn-sm px-2 py-1"
+                      :style="String(user.status) === '0'
+                        ? 'background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.3);color:#2ecc71;'
+                        : 'background:rgba(243,156,18,.12);border:1px solid rgba(243,156,18,.3);color:#f39c12;'"
+                      @click="toggleStatus(user)"
+                      :disabled="busyId === user.id"
+                      :title="String(user.status) === '0' ? 'Activate' : 'Deactivate'">
+                      <i class="bi" :class="String(user.status) === '0' ? 'bi-person-check' : 'bi-person-slash'"></i>
+                    </button>
                     <button class="btn btn-sm px-2 py-1" style="background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.25);color:#e74c3c;" @click="deleteUser(user)" title="Delete">
                       <i class="bi bi-trash"></i>
                     </button>
@@ -112,53 +120,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Create User Modal -->
-    <Transition name="fade">
-      <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal=false">
-        <div class="card p-4" style="max-width:460px;width:100%;border-radius:1.25rem;">
-          <div class="d-flex align-items-center justify-content-between mb-4">
-            <h5 class="text-cream mb-0">Create User</h5>
-            <button class="btn-close btn-close-white" @click="showCreateModal=false"></button>
-          </div>
-          <form @submit.prevent="createUser" novalidate>
-            <div class="row g-3">
-              <div class="col-12">
-                <label class="form-label">Full Name</label>
-                <input v-model="newUser.name" class="form-control" placeholder="Ahmed Mohamed" />
-              </div>
-              <div class="col-12">
-                <label class="form-label">Email</label>
-                <input v-model="newUser.email" type="email" class="form-control" placeholder="ahmed@example.com" />
-              </div>
-              <div class="col-12">
-                <label class="form-label">Phone</label>
-                <input v-model="newUser.phone" class="form-control" placeholder="01234567890" />
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Role</label>
-                <select v-model="newUser.role" class="form-select">
-                  <option value="user">User</option>
-                  <option value="seller">Seller</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Password</label>
-                <input v-model="newUser.password" type="password" class="form-control" placeholder="Min 8 chars" />
-              </div>
-            </div>
-            <div class="d-flex gap-2 mt-4">
-              <button type="submit" class="btn btn-gold flex-grow-1" :disabled="createLoading">
-                <span class="spinner-border spinner-border-sm me-2" v-if="createLoading"></span>
-                Create User
-              </button>
-              <button type="button" class="btn btn-outline-gold" @click="showCreateModal=false">Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -175,15 +136,23 @@ const loading = ref(true)
 const total = ref(0)
 const currentPage = ref(1)
 const totalPages = ref(1)
-const showCreateModal = ref(false)
-const createLoading = ref(false)
+const busyId = ref(null)
 const filters = reactive({ search: '', role: '', status: '' })
-const newUser = reactive({ name: '', email: '', phone: '', role: 'user', password: '' })
 
 let debounceTimer = null
 function debouncedFetch() { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => fetchUsers(1), 350) }
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-EG', { month:'short', day:'numeric', year:'numeric' }) : '—' }
+
+// Trust state shown in the "State" column: Top (≥10 sales) / Trusted (≥3) / Verified (National ID).
+function stateOf(u) {
+  if (!u || u.role === 'admin') return null
+  const sales = Number(u.completed_sales || 0)
+  if (sales >= 10) return { label: 'Top', cls: 'badge-gold', icon: 'bi bi-award-fill' }
+  if (sales >= 3)  return { label: 'Trusted', cls: 'bg-info text-dark', icon: 'bi bi-star-fill' }
+  if (u.national_id) return { label: 'Verified', cls: 'bg-success', icon: 'bi bi-patch-check-fill' }
+  return null
+}
 function resetFilters() { filters.search=''; filters.role=''; filters.status=''; fetchUsers(1) }
 
 async function fetchUsers(page = 1) {
@@ -191,11 +160,27 @@ async function fetchUsers(page = 1) {
   try {
     const params = { page, per_page: 15, search: filters.search||undefined, role: filters.role||undefined, status: filters.status||undefined }
     const res = await userService.getAll(params)
+    const meta = res.data?.pagination || {}
     users.value = res.data?.data || res.data || []
-    total.value = res.data?.total || users.value.length
-    totalPages.value = res.data?.last_page || 1
+    total.value = meta.total ?? users.value.length
+    totalPages.value = meta.last_page ?? 1
     currentPage.value = page
   } catch (_) { users.value = [] } finally { loading.value = false }
+}
+
+// Activate ('1') / deactivate ('0') — a deactivated user is blocked at login (403).
+async function toggleStatus(user) {
+  const next = String(user.status) === '0' ? '1' : '0'
+  busyId.value = user.id
+  try {
+    await userService.update(user.id, { status: next })
+    user.status = next
+    toast.success(next === '0' ? `${user.name} deactivated` : `${user.name} activated`)
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to update status')
+  } finally {
+    busyId.value = null
+  }
 }
 
 async function updateRole(user, newRole) {
@@ -217,22 +202,6 @@ async function deleteUser(user) {
     toast.success('User deleted')
   } catch (err) {
     toast.error(err.response?.data?.message || 'Delete failed')
-  }
-}
-
-async function createUser() {
-  if (!newUser.name || !newUser.email || !newUser.password) { toast.error('Name, email and password are required'); return }
-  createLoading.value = true
-  try {
-    await userService.create({ ...newUser, password_confirmation: newUser.password })
-    toast.success('User created!')
-    showCreateModal.value = false
-    Object.assign(newUser, { name:'', email:'', phone:'', role:'user', password:'' })
-    fetchUsers(1)
-  } catch (err) {
-    toast.error(err.response?.data?.message || 'Failed to create user')
-  } finally {
-    createLoading.value = false
   }
 }
 
